@@ -1,0 +1,10 @@
+{
+  "name": "keropromo",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*"],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "api": "npm run dev -w @keropromo/api"
+  }
+}

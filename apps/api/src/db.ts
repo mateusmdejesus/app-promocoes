@@ -1,0 +1,98 @@
+import { createRequire } from 'node:module';
+import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
+
+// Carregado via require: o Vite (usado nos testes) ainda não reconhece o módulo node:sqlite.
+const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof import('node:sqlite');
+
+/**
+ * SQLite embutido do Node 22 (sem dependência nativa).
+ * Bom para começar e para testes; para produção com muitos usuários a ideia
+ * é trocar por Postgres mantendo as mesmas consultas em `repo.ts`.
+ */
+export type DB = DatabaseSyncT;
+
+export function openDb(path: string): DB {
+  const db = new DatabaseSync(path);
+  db.exec(`
+    PRAGMA journal_mode = WAL;
+    PRAGMA foreign_keys = ON;
+
+    CREATE TABLE IF NOT EXISTS products (
+      id TEXT PRIMARY KEY,
+      store TEXT NOT NULL,
+      external_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      url TEXT NOT NULL,
+      image_url TEXT,
+      UNIQUE (store, external_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS price_points (
+      product_id TEXT NOT NULL REFERENCES products(id),
+      price INTEGER NOT NULL,
+      list_price INTEGER,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS price_points_product_at ON price_points (product_id, at);
+
+    CREATE TABLE IF NOT EXISTS offers (
+      product_id TEXT PRIMARY KEY REFERENCES products(id),
+      price INTEGER NOT NULL,
+      reference_price INTEGER NOT NULL,
+      discount_pct INTEGER NOT NULL,
+      tier TEXT NOT NULL,
+      verified INTEGER NOT NULL,
+      inflated INTEGER NOT NULL,
+      lowest INTEGER NOT NULL,
+      history_days INTEGER NOT NULL,
+      detected_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS offers_tier ON offers (tier);
+
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      secret_hash TEXT NOT NULL UNIQUE,
+      push_token TEXT,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS user_categories (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      category TEXT NOT NULL,
+      PRIMARY KEY (user_id, category)
+    );
+
+    CREATE TABLE IF NOT EXISTS events (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      product_id TEXT,
+      category TEXT,
+      query TEXT,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS events_user_at ON events (user_id, at);
+    CREATE INDEX IF NOT EXISTS events_product_kind_at ON events (product_id, kind, at);
+
+    CREATE TABLE IF NOT EXISTS alerts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      term TEXT NOT NULL,
+      max_price INTEGER,
+      min_tier TEXT NOT NULL,
+      stores TEXT NOT NULL,
+      enabled INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS pushes (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS pushes_user_at ON pushes (user_id, at);
+  `);
+  return db;
+}
