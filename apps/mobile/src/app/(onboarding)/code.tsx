@@ -43,7 +43,9 @@ export default function Code() {
       setError((e as Error).message);
       setCode('');
       setBusy(false);
-      input.current?.focus();
+      // Reabre o teclado: no Android, focus() num campo já focado não faz nada.
+      input.current?.blur();
+      setTimeout(() => input.current?.focus(), 50);
     }
   };
 
@@ -75,31 +77,35 @@ export default function Code() {
           <Text style={styles.link}>Trocar e-mail</Text>
         </Pressable>
 
-        <Pressable onPress={() => input.current?.focus()} accessible={false} style={styles.cells}>
-          {Array.from({ length: LENGTH }, (_, i) => {
-            const active = focused && !busy && i === Math.min(code.length, LENGTH - 1);
-            return (
-              <View key={i} style={[styles.cell, active && styles.cellActive]}>
-                <Text style={[styles.digit, busy && { color: color.inkDisabled }]}>{code[i] ?? ''}</Text>
-              </View>
-            );
-          })}
-        </Pressable>
-        <TextInput
-          ref={input}
-          value={code}
-          onChangeText={onChange}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          keyboardType="number-pad"
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-          maxLength={LENGTH}
-          autoFocus
-          editable={!busy}
-          accessibilityLabel={`Código de ${LENGTH} dígitos`}
-          style={styles.hidden}
-        />
+        {/* O campo real fica por cima das células: qualquer toque nelas cai direto nele. */}
+        <View style={styles.cellsWrap}>
+          <View style={styles.cells} importantForAccessibility="no-hide-descendants">
+            {Array.from({ length: LENGTH }, (_, i) => {
+              const active = focused && !busy && i === Math.min(code.length, LENGTH - 1);
+              return (
+                <View key={i} style={[styles.cell, active && styles.cellActive]}>
+                  <Text style={[styles.digit, busy && { color: color.inkDisabled }]}>{code[i] ?? ''}</Text>
+                </View>
+              );
+            })}
+          </View>
+          <TextInput
+            ref={input}
+            value={code}
+            onChangeText={onChange}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            keyboardType="number-pad"
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            maxLength={LENGTH}
+            autoFocus
+            editable={!busy}
+            accessibilityLabel={`Código de ${LENGTH} dígitos`}
+            caretHidden
+            style={styles.overlay}
+          />
+        </View>
         {error ? (
           <Text style={[type.caption, { color: color.ink }]} accessibilityLiveRegion="assertive">
             {error}
@@ -107,9 +113,7 @@ export default function Code() {
         ) : null}
 
         <PressableScale onPress={resend} disabled={wait > 0} accessibilityRole="button" style={styles.resend}>
-          <Text style={[styles.resendText, wait > 0 && { color: color.inkDisabled }]}>
-            {wait > 0 ? `Reenviar código (0:${String(wait).padStart(2, '0')})` : 'Reenviar código'}
-          </Text>
+          <Text style={[styles.resendText, wait > 0 && { color: color.inkDisabled }]}>{wait > 0 ? `Reenviar código (0:${String(wait).padStart(2, '0')})` : 'Reenviar código'}</Text>
         </PressableScale>
       </View>
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
@@ -124,11 +128,12 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: gutter, gap: 16 },
   title: { color: color.ink, fontSize: 26, lineHeight: 31 },
   link: { fontFamily: font.body, fontSize: 16, color: color.ink, textDecorationLine: 'underline' },
-  cells: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  cells: { flexDirection: 'row', gap: 8 },
   cell: { flex: 1, maxWidth: 52, height: 56, borderRadius: 12, backgroundColor: color.stone, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
   cellActive: { backgroundColor: color.surface, borderColor: color.ink },
   digit: { fontFamily: font.display, fontSize: 24, color: color.ink },
-  hidden: { position: 'absolute', opacity: 0, width: 1, height: 1 },
+  cellsWrap: { marginTop: 12 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.02, color: 'transparent' },
   resend: { alignSelf: 'flex-start', height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: color.stone, justifyContent: 'center', marginTop: 8 },
   resendText: { fontFamily: font.medium, fontSize: 15, color: color.ink },
   footer: { paddingHorizontal: gutter, paddingTop: 8 },
