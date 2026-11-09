@@ -8,6 +8,26 @@ promoção **de verdade**.
 - O desconto é calculado contra o preço que **nós observamos** nos últimos 90 dias,
   não contra o "de" que a loja anuncia. Isso pega a loja que sobe o preço antes de "dar desconto".
 
+## Modelo de negócio
+
+Assinatura, sem afiliado e sem período de teste:
+
+| | Grátis | Pro (R$ 14,90/mês ou R$ 119/ano) |
+|---|---|---|
+| Promoções (25%+) | ✓ | ✓ |
+| Ofertas quentes (40%+) | 1 hora depois (aparecem travadas, sem preço nem link) | Na hora |
+| Aviso de oferta quente | — | Na hora |
+| Alertas de produto | 1 (aviso de oferta quente sai com 1 h de atraso) | Ilimitados |
+| Histórico de preço | 7 dias | 90 dias |
+
+As regras ficam em `packages/core/src/plans.ts` e valem no servidor (o app não decide o que libera).
+
+## Conta
+
+E-mail com código de 6 dígitos (sem senha) e Entrar com Apple. O onboarding cria uma conta
+anônima no aparelho; ao se identificar, ela vira a conta da pessoa (interesses mantidos).
+O perfil tem Sair e Excluir conta (exigência da Apple).
+
 ## Estrutura
 
 | Pasta | O que é |
@@ -48,13 +68,27 @@ Testes: `npm test` na raiz.
 |---|---|
 | Loja de exemplo (`demo`) | Funciona. Gera preços realistas, inclusive "de" inflado, para desenvolver sem depender de ninguém. |
 | Mercado Livre | Coletor escrito sobre a API oficial; **ainda não testado** com um token real. Precisa de `ML_ACCESS_TOKEN`. |
-| Amazon, Magalu, AliExpress, KaBuM! | A fazer. Cada uma precisa de cadastro no programa de afiliados para liberar a API. |
+| Amazon | A fazer, via Keepa (serviço pago de histórico de preços da Amazon). |
+| KaBuM! e outras | A fazer, via feed de produtos da Awin (o cadastro de parceiro é só a chave de acesso aos dados). |
 
 Lojas ativas são escolhidas por `STORES` (veja `apps/api/.env.example`).
 
+## Testando o Pro sem loja
+
+API com `ALLOW_DEV_PURCHASES=1` e app com `EXPO_PUBLIC_DEV_PURCHASES=1`: o botão "Assinar"
+libera o Pro direto pela API. Sem `RESEND_API_KEY`, o código de login aparece no terminal da API.
+
 ## Para publicar
 
-1. Cadastrar nos programas de afiliados e obter as credenciais das APIs.
-2. Criar o projeto no EAS (`npx eas-cli init`) para ter o `projectId`: sem ele o app não recebe push.
-3. Hospedar a API (qualquer servidor Node 22) e, com mais usuários, trocar o SQLite por Postgres.
-4. Contas de desenvolvedor Apple (US$ 99/ano) e Google Play (US$ 25 uma vez).
+1. **Lojas de dados:** credenciais de cada fonte (API do Mercado Livre; Keepa para Amazon; feeds de
+   produtos via Awin para KaBuM! e outras que oferecem catálogo para parceiros).
+2. **Assinatura:** criar os produtos "mensal" e "anual" na App Store Connect e no Google Play,
+   ligar no RevenueCat (ofertas com pacotes `monthly` e `annual`), configurar o webhook para
+   `POST /v1/webhooks/revenuecat` com o segredo `REVENUECAT_WEBHOOK_AUTH`, e pôr as chaves públicas
+   em `EXPO_PUBLIC_REVENUECAT_IOS_KEY` / `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY`.
+3. **Login:** `APPLE_BUNDLE_ID` na API e "Sign in with Apple" ligado no app id; conta no Resend
+   (`RESEND_API_KEY`) com domínio verificado para enviar os códigos.
+4. Criar o projeto no EAS (`npx eas-cli init`) para ter o `projectId`: sem ele o app não recebe push.
+5. Hospedar a API (qualquer servidor Node 22) e, com mais usuários, trocar o SQLite por Postgres.
+6. Publicar páginas de Termos e Privacidade (o app aponta para keropromo.app/termos e /privacidade).
+7. Contas de desenvolvedor Apple (US$ 99/ano) e Google Play (US$ 25 uma vez).

@@ -51,7 +51,7 @@ export default function Found() {
     run();
   }, [run]);
 
-  const next = () => router.push({ pathname: '/notifications', params: { categories } });
+  const next = () => router.push('/account');
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 12 }]}>
@@ -120,7 +120,7 @@ function Result({ offers, picked }: { offers: Offer[]; picked: Category[] }) {
                 {o.title}
               </Text>
               <Text style={styles.cardMeta}>
-                {formatBRL(o.price)} · {o.storeName}
+                {o.price == null ? 'Liberada já no Pro' : formatBRL(o.price)} · {o.storeName}
               </Text>
             </View>
             <DiscountBadge pct={o.discountPct} tier={o.tier} size="s" inverse />

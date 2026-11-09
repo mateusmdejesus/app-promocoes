@@ -4,9 +4,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { timeAgo } from '../../api';
-import { CircleButton, PrimaryButton } from '../../components/Controls';
+import { timeAgo, unlockLabel, type Offer } from '../../api';
+import { CircleButton, PrimaryButton, TextButton } from '../../components/Controls';
 import { DiscountBadge } from '../../components/DiscountBadge';
+import { Icon } from '../../components/Icon';
 import { PriceChart } from '../../components/PriceChart';
 import { ProductImage } from '../../components/ProductImage';
 import { ErrorState, SkeletonList } from '../../components/States';
@@ -14,11 +15,15 @@ import { useSession } from '../../session';
 import { color, font, gutter, radius, type } from '../../theme';
 import { useAsync } from '../../useAsync';
 
+type Unlocked = Offer & { price: number; referencePrice: number; url: string };
+const isUnlocked = (o: Offer): o is Unlocked => !o.locked && o.price != null && o.referencePrice != null && o.url != null;
+
 export default function OfferDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { api } = useSession();
+  const { api, me } = useSession();
   const insets = useSafeAreaInsets();
-  const { data, error, loading, reload } = useAsync(() => api.offer(id), [id]);
+  // Recarrega quando o plano muda (ex.: acabou de assinar na tela de planos).
+  const { data, error, loading, reload } = useAsync(() => api.offer(id), [id, me?.plan]);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
@@ -36,18 +41,15 @@ export default function OfferDetail() {
     );
   }
 
-  const { offer, history } = data;
-  const goToStore = () => {
-    api.event('click_out', offer.id).catch(() => undefined);
-    Linking.openURL(offer.url);
-  };
+  const { offer, history, historyDays } = data;
+  const open = isUnlocked(offer) ? offer : null;
   const toggleSave = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (!saved) api.event('save', offer.id).catch(() => undefined);
     setSaved(!saved);
   };
-  const share = () => Share.share({ message: `${offer.title} por ${formatBRL(offer.price)} (−${offer.discountPct}%) no ${offer.storeName}: ${offer.url}` });
-  const minPrice = Math.min(...history.map((h) => h.price), offer.price);
+  const share = () =>
+    Share.share({ message: open ? `${open.title} por ${formatBRL(open.price)} (−${open.discountPct}%) no ${open.storeName}: ${open.url}` : `${offer.title} com ${offer.discountPct}% no keropromo` });
 
   return (
     <View style={styles.screen}>
@@ -73,54 +75,98 @@ export default function OfferDetail() {
           <Text style={styles.title} accessibilityRole="header">
             {offer.title}
           </Text>
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{formatBRL(offer.price)}</Text>
-            <Text style={styles.was} accessibilityLabel={`antes ${formatBRL(offer.referencePrice)}`}>
-              {formatBRL(offer.referencePrice)}
-            </Text>
-          </View>
-          {!offer.verified ? <Text style={styles.meta}>Desconto informado pela loja. Ainda estamos juntando o histórico deste produto.</Text> : null}
+          {open ? (
+            <>
+              <View style={styles.priceRow}>
+                <Text style={styles.price}>{formatBRL(open.price)}</Text>
+                <Text style={styles.was} accessibilityLabel={`antes ${formatBRL(open.referencePrice)}`}>
+                  {formatBRL(open.referencePrice)}
+                </Text>
+              </View>
+              {!open.verified ? <Text style={styles.meta}>Desconto informado pela loja. Ainda estamos juntando o histórico deste produto.</Text> : null}
+            </>
+          ) : null}
         </View>
 
-        <View style={styles.why}>
-          <Text style={[type.label, { color: color.ink, fontFamily: font.semibold }]} accessibilityRole="header">
-            Por que é uma boa oferta
-          </Text>
-          <View style={styles.tiles}>
-            <View style={styles.tile}>
-              <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>−{offer.discountPct}%</Text>
-              <Text style={styles.tileLabel}>{offer.verified ? 'abaixo do preço normal' : 'segundo a loja'}</Text>
-            </View>
-            <View style={styles.tile}>
-              <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatBRL(offer.referencePrice - offer.price)}</Text>
-              <Text style={styles.tileLabel}>de economia</Text>
-            </View>
-            <View style={styles.tile}>
-              <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{offer.lowestIn90d ? 'Menor' : formatBRL(offer.referencePrice)}</Text>
-              <Text style={styles.tileLabel}>{offer.lowestIn90d ? 'preço em 90 dias' : 'preço normal'}</Text>
-            </View>
-          </View>
-        </View>
+        {open ? <Facts offer={open} /> : <LockedCard offer={offer} />}
 
-        <View style={styles.card}>
-          <View style={styles.cardHead}>
-            <Text style={[type.label, { color: color.ink, fontFamily: font.semibold }]}>Histórico de preço</Text>
-            <Text style={styles.meta}>90 dias</Text>
+        {open ? (
+          <View style={styles.card}>
+            <View style={styles.cardHead}>
+              <Text style={[type.label, { color: color.ink, fontFamily: font.semibold }]}>Histórico de preço</Text>
+              <Text style={styles.meta}>{historyDays} dias</Text>
+            </View>
+            <PriceChart points={history} reference={open.referencePrice} hot={open.tier === 'hot'} />
+            <View style={styles.cardHead}>
+              <Text style={styles.meta}>Normal: {formatBRL(open.referencePrice)}</Text>
+              <Text style={[type.caption, { color: color.ink, fontFamily: font.semibold }]}>Hoje: {formatBRL(open.price)}</Text>
+            </View>
+            {me?.plan !== 'pro' ? (
+              <View style={styles.upsell}>
+                <Text style={[type.caption, { color: color.inkMuted, flex: 1 }]}>No grátis, o histórico mostra {historyDays} dias.</Text>
+                <TextButton label="Ver 90 dias com Pro" onPress={() => router.push('/plans')} />
+              </View>
+            ) : null}
           </View>
-          <PriceChart points={history} reference={offer.referencePrice} hot={offer.tier === 'hot'} />
-          <View style={styles.cardHead}>
-            <Text style={styles.meta}>Normal: {formatBRL(offer.referencePrice)}</Text>
-            <Text style={[type.caption, { color: color.ink, fontFamily: font.semibold }]}>
-              {offer.price <= minPrice ? `Hoje: ${formatBRL(offer.price)}, o menor` : `Hoje: ${formatBRL(offer.price)}`}
-            </Text>
-          </View>
-        </View>
+        ) : null}
       </ScrollView>
 
       <View style={[styles.cta, { paddingBottom: insets.bottom + 12 }]}>
-        <PrimaryButton label="Ir para a loja" icon="external" onPress={goToStore} />
-        <Text style={styles.disclosure}>Link de parceiro: podemos ganhar comissão, você não paga nada a mais.</Text>
+        {open ? (
+          <PrimaryButton
+            label={`Ir para ${open.storeName}`}
+            icon="external"
+            onPress={() => {
+              api.event('click_out', open.id).catch(() => undefined);
+              Linking.openURL(open.url);
+            }}
+          />
+        ) : (
+          <PrimaryButton label="Ver agora com o Pro" onPress={() => router.push('/plans')} />
+        )}
       </View>
+    </View>
+  );
+}
+
+/** "Por que é uma boa oferta" (padrão "Why this recommendation" do Headspace). */
+function Facts({ offer }: { offer: Unlocked }) {
+  const tiles = [
+    { value: `−${offer.discountPct}%`, label: offer.verified ? 'abaixo do preço normal' : 'segundo a loja' },
+    // Economia arredondada para reais inteiros: cabe no quadro e é o que a pessoa lembra.
+    { value: formatBRL(Math.round((offer.referencePrice - offer.price) / 100) * 100), label: 'de economia' },
+    offer.lowestIn90d ? { value: 'Menor', label: 'preço em 90 dias' } : { value: formatBRL(offer.referencePrice), label: 'preço normal' },
+  ];
+  return (
+    <View style={styles.why}>
+      <Text style={[type.label, { color: color.ink, fontFamily: font.semibold }]} accessibilityRole="header">
+        Por que é uma boa oferta
+      </Text>
+      <View style={styles.tiles}>
+        {tiles.map((t) => (
+          <View key={t.label} style={styles.tile}>
+            <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {t.value}
+            </Text>
+            <Text style={styles.tileLabel}>{t.label}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Oferta quente ainda reservada ao Pro: explica o atraso e oferece o Pro. */
+function LockedCard({ offer }: { offer: Offer }) {
+  return (
+    <View style={styles.locked} accessibilityLiveRegion="polite">
+      <View style={styles.lockIcon}>
+        <Icon name="lock" size={22} stroke={color.paper} width={2} />
+      </View>
+      <Text style={styles.lockedTitle}>Oferta quente acabou de aparecer.</Text>
+      <Text style={[type.body, { color: '#D9D2C6' }]}>
+        Quem é Pro já está vendo o preço e o link. No plano grátis, ela {offer.unlocksAt ? unlockLabel(offer.unlocksAt).toLowerCase() : 'libera em breve'}, se ainda estiver valendo.
+      </Text>
     </View>
   );
 }
@@ -142,6 +188,9 @@ const styles = StyleSheet.create({
   tileLabel: { fontFamily: font.body, fontSize: 12, lineHeight: 16, color: color.inkMuted },
   card: { marginHorizontal: gutter, marginTop: 12, backgroundColor: color.surface, borderRadius: radius.card, padding: 16, gap: 10 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  cta: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: color.paper, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line, paddingHorizontal: gutter, paddingTop: 12, gap: 8 },
-  disclosure: { ...type.caption, fontSize: 12, lineHeight: 16, color: color.inkMuted, textAlign: 'center' },
+  upsell: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line, marginTop: 4 },
+  locked: { marginHorizontal: gutter, marginTop: 20, backgroundColor: color.ink, borderRadius: radius.card, padding: 20, gap: 8 },
+  lockIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2A2520', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  lockedTitle: { fontFamily: font.display, fontSize: 22, lineHeight: 28, color: color.paper, letterSpacing: -0.4 },
+  cta: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: color.paper, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line, paddingHorizontal: gutter, paddingTop: 12 },
 });

@@ -44,6 +44,8 @@ function RootStack() {
         contentStyle: { backgroundColor: color.paper },
       }}
     >
+      {/* Planos: no fim do onboarding e de dentro do app. */}
+      <Stack.Screen name="plans" options={{ presentation: onboarded ? 'modal' : 'card' }} />
       <Stack.Protected guard={!onboarded}>
         <Stack.Screen name="(onboarding)" />
       </Stack.Protected>

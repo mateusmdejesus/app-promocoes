@@ -1,5 +1,3 @@
-import { CATEGORIES, type Category } from '@keropromo/core';
-import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,8 +26,6 @@ function Note({ title, body, time, dim }: { title: string; body: string; time: s
 }
 
 export default function NotificationsStep() {
-  const { categories } = useLocalSearchParams<{ categories?: string }>();
-  const picked = (categories ?? '').split(',').filter((c): c is Category => (CATEGORIES as readonly string[]).includes(c));
   const { finishOnboarding, api } = useSession();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
@@ -41,7 +37,7 @@ export default function NotificationsStep() {
     try {
       // A permissão é pedida só depois de explicar o porquê, nunca ao abrir o app.
       const token = askPush ? await registerForPush() : null;
-      await finishOnboarding(picked);
+      await finishOnboarding();
       if (token) await api.updateMe({ pushToken: token });
       // O guard do layout raiz troca para as abas assim que `onboarded` muda.
     } catch (e) {

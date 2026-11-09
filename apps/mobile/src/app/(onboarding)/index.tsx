@@ -5,7 +5,7 @@ import Animated, { Easing, FadeIn, FadeInDown, ReduceMotion, useAnimatedStyle, u
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { TagMark } from '../../components/Brand';
-import { PrimaryButton } from '../../components/Controls';
+import { PrimaryButton, TextButton } from '../../components/Controls';
 import { color, font, gutter, type } from '../../theme';
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
@@ -69,6 +69,7 @@ export default function Welcome() {
         </Text>
         <Text style={[type.body, { color: color.inkMuted }]}>A gente vigia as lojas o dia todo e te avisa quando o preço cai de verdade.</Text>
         <PrimaryButton label="Começar" icon="next" onPress={() => router.push('/interests')} style={{ marginTop: 12 }} />
+        <TextButton label="Já tenho conta. Entrar" onPress={() => router.push({ pathname: '/account', params: { mode: 'login' } })} />
         <Text style={styles.legal}>Ao continuar, você concorda com os Termos de Uso e a Política de Privacidade.</Text>
       </View>
     </View>
@@ -92,7 +93,7 @@ const styles = StyleSheet.create({
   // A etiqueta atravessa a divisa entre o bloco escuro e o papel.
   bigTag: { position: 'absolute', right: 8, bottom: -40, width: 232, height: 120, transform: [{ rotate: '-8deg' }], justifyContent: 'center', paddingLeft: 66 },
   bigTagText: { fontFamily: font.display, fontSize: 54, color: color.ink, letterSpacing: -2 },
-  sheet: { paddingHorizontal: 24, paddingTop: 72, gap: 12 },
+  sheet: { paddingHorizontal: 24, paddingTop: 64, gap: 10 },
   title: { color: color.ink, fontSize: 32, lineHeight: 35, paddingRight: 24 },
   legal: { fontFamily: font.body, fontSize: 12, lineHeight: 16, color: color.inkMuted, textAlign: 'center' },
 });

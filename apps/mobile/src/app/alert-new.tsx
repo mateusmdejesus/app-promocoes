@@ -63,6 +63,8 @@ export default function NewAlert() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (e) {
+      // Plano grátis tem 1 alerta: leva para os planos.
+      if ((e as { upgrade?: boolean }).upgrade) return router.replace('/plans');
       setError((e as Error).message);
       setBusy(false);
     }

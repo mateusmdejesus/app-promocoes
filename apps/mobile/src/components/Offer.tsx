@@ -1,7 +1,8 @@
 import { formatBRL } from '@keropromo/core';
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { timeAgo, type Offer } from '../api';
+import { timeAgo, unlockLabel, type Offer } from '../api';
+import { Icon } from './Icon';
 import { color, font, radius, type } from '../theme';
 import { DiscountBadge } from './DiscountBadge';
 import { PressableScale } from './PressableScale';
@@ -10,7 +11,22 @@ import { ProductImage } from './ProductImage';
 const open = (o: Offer) => router.push({ pathname: '/offer/[id]', params: { id: o.id } });
 
 const a11y = (o: Offer) =>
-  `${o.title}. ${formatBRL(o.price)}, antes ${formatBRL(o.referencePrice)}, ${o.discountPct}% de desconto${o.tier === 'hot' ? ', oferta quente' : ''}. ${o.storeName}, ${timeAgo(o.detectedAt)}.`;
+  o.locked || o.price == null || o.referencePrice == null
+    ? `${o.title}. Oferta quente de ${o.discountPct}%, ${o.unlocksAt ? unlockLabel(o.unlocksAt).toLowerCase() : 'bloqueada'} no plano grátis. ${o.storeName}.`
+    : `${o.title}. ${formatBRL(o.price)}, antes ${formatBRL(o.referencePrice)}, ${o.discountPct}% de desconto${o.tier === 'hot' ? ', oferta quente' : ''}. ${o.storeName}, ${timeAgo(o.detectedAt)}.`;
+
+/** No lugar do preço, quando a oferta quente ainda está reservada ao Pro. */
+function LockedPrice({ offer, size }: { offer: Offer; size: 'hero' | 'row' }) {
+  return (
+    <View style={styles.lockedRow}>
+      <View style={styles.lockPill}>
+        <Icon name="lock" size={size === 'hero' ? 16 : 14} width={2} />
+        <Text style={styles.lockText}>{offer.unlocksAt ? unlockLabel(offer.unlocksAt) : 'Só no Pro'}</Text>
+      </View>
+      {size === 'hero' ? <Text style={styles.lockHint}>Pro vê agora</Text> : null}
+    </View>
+  );
+}
 
 /** Card grande de "Quentes agora". */
 export function OfferHeroCard({ offer, width }: { offer: Offer; width?: number }) {
@@ -29,10 +45,14 @@ export function OfferHeroCard({ offer, width }: { offer: Offer; width?: number }
         <Text style={type.bodyStrong} numberOfLines={2}>
           {offer.title}
         </Text>
-        <View style={styles.priceRow}>
-          <Text style={[type.priceHero, styles.ink]}>{formatBRL(offer.price)}</Text>
-          <Text style={styles.was}>{formatBRL(offer.referencePrice)}</Text>
-        </View>
+        {offer.price == null || offer.referencePrice == null ? (
+          <LockedPrice offer={offer} size="hero" />
+        ) : (
+          <View style={styles.priceRow}>
+            <Text style={[type.priceHero, styles.ink]}>{formatBRL(offer.price)}</Text>
+            <Text style={styles.was}>{formatBRL(offer.referencePrice)}</Text>
+          </View>
+        )}
         {offer.lowestIn90d ? <Text style={styles.meta}>Menor preço dos últimos 90 dias</Text> : null}
       </View>
     </PressableScale>
@@ -51,7 +71,7 @@ export function OfferRow({ offer }: { offer: Offer }) {
         <Text style={styles.rowTitle} numberOfLines={2}>
           {offer.title}
         </Text>
-        <Text style={[type.priceRow, styles.ink]}>{formatBRL(offer.price)}</Text>
+        {offer.price == null ? <LockedPrice offer={offer} size="row" /> : <Text style={[type.priceRow, styles.ink]}>{formatBRL(offer.price)}</Text>}
       </View>
       <DiscountBadge pct={offer.discountPct} tier={offer.tier} size="s" />
     </PressableScale>
@@ -70,5 +90,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
   thumb: { width: 72, height: 72, borderRadius: 12 },
   rowBody: { flex: 1, gap: 2 },
+  lockedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  lockPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: color.stone, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
+  lockText: { fontFamily: font.semibold, fontSize: 13, color: color.ink },
+  lockHint: { ...type.caption, color: color.inkMuted },
   rowTitle: { fontFamily: font.medium, fontSize: 15, lineHeight: 20, color: color.ink },
 });
