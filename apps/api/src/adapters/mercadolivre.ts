@@ -3,7 +3,7 @@ import type { ListingSnapshot, StoreAdapter } from './types';
 
 /**
  * Coletor do Mercado Livre pela API oficial (developers.mercadolivre.com.br).
- * Precisa de um token de acesso de um app registrado (ML_ACCESS_TOKEN).
+ * Usa o acesso renovado automaticamente pelo MercadoLivreAuth (ver mercadolivreAuth.ts).
  *
  * Ainda não foi testado contra a API real: este ambiente não tem um token.
  * Antes de ligar em produção, valide os campos com uma chamada real.
@@ -31,7 +31,7 @@ interface MlSearchItem {
 }
 
 export interface MercadoLivreOptions {
-  accessToken: string;
+  auth: { accessToken(): Promise<string> };
   /** Transforma o link do produto em link de afiliado, se configurado. */
   affiliateLink?: (permalink: string) => string;
   fetchImpl?: typeof fetch;
@@ -48,7 +48,8 @@ export class MercadoLivreAdapter implements StoreAdapter {
     const out: ListingSnapshot[] = [];
     for (const s of SEARCHES) {
       const url = `https://api.mercadolibre.com/sites/MLB/search?q=${encodeURIComponent(s.q)}&limit=50`;
-      const res = await f(url, { headers: { Authorization: `Bearer ${this.opts.accessToken}` } });
+      const token = await this.opts.auth.accessToken();
+      const res = await f(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error(`Mercado Livre respondeu ${res.status} para "${s.q}"`);
       const body = (await res.json()) as { results?: MlSearchItem[] };
       for (const it of body.results ?? []) {

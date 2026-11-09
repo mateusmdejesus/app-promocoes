@@ -8,8 +8,9 @@ import { Repo } from './repo';
 import { seedDemoHistory } from './seedDemo';
 import { buildServer } from './server';
 
-const repo = new Repo(openDb(config.databasePath));
-const adapters = buildAdapters();
+const db = openDb(config.databasePath);
+const repo = new Repo(db);
+const adapters = buildAdapters(db);
 const sender = new ExpoPushSender();
 
 let running = false;

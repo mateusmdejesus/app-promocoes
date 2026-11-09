@@ -67,9 +67,11 @@ Testes: `npm test` na raiz.
 | Loja | Situação |
 |---|---|
 | Loja de exemplo (`demo`) | Funciona. Gera preços realistas, inclusive "de" inflado, para desenvolver sem depender de ninguém. |
-| Mercado Livre | Coletor escrito sobre a API oficial; **ainda não testado** com um token real. Precisa de `ML_ACCESS_TOKEN`. |
+| Mercado Livre | Coletor pela API oficial, com renovação automática do acesso. Precisa de `ML_CLIENT_ID`, `ML_CLIENT_SECRET` e `ML_REFRESH_TOKEN`. **Ainda não testado** com a API real. |
 | Amazon | A fazer, via Keepa (serviço pago de histórico de preços da Amazon). |
 | KaBuM! e outras | A fazer, via feed de produtos da Awin (o cadastro de parceiro é só a chave de acesso aos dados). |
+
+Para conectar o Mercado Livre (uma vez só): no aplicativo de desenvolvedor, use o link de autorização para receber um código, e rode `npm run ml:connect -w @keropromo/api -- CODIGO`. Ele imprime o `ML_REFRESH_TOKEN`, que vai no Railway. O código vale uma vez e por pouco tempo.
 
 Lojas ativas são escolhidas por `STORES` (veja `apps/api/.env.example`).
 

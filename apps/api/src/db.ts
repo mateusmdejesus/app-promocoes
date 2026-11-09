@@ -125,6 +125,9 @@ export function openDb(path: string): DB {
     );
     CREATE INDEX IF NOT EXISTS pending_pushes_due ON pending_pushes (send_after);
 
+    -- Pares chave/valor do servidor (ex.: refresh token do Mercado Livre).
+    CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+
     -- Cobranças Pix do Pro (mensal ou anual). Cada pagamento aprovado estende o acesso.
     CREATE TABLE IF NOT EXISTS pix_charges (
       id TEXT PRIMARY KEY,
