@@ -4,6 +4,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
+import { MobileNav } from '../components/MobileNav';
 import { SessionProvider } from '../components/Session';
 import { SITE_URL } from '../lib/api';
 
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Header />
           <main>{children}</main>
           <Footer />
+          <MobileNav />
         </SessionProvider>
       </body>
     </html>

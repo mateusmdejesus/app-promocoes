@@ -32,7 +32,8 @@ function Locked({ offer, compact }: { offer: Offer; compact?: boolean }) {
   );
 }
 
-const href = (o: Offer) => (o.locked ? '/pro' : `/oferta/${encodeURIComponent(o.id)}`);
+// Sempre a página da oferta: lá o Pro vê preço e link, e quem não é Pro vê o convite para assinar.
+const href = (o: Offer) => `/oferta/${encodeURIComponent(o.id)}`;
 const label = (o: Offer) =>
   o.locked || o.price == null
     ? `${o.title}. Oferta quente de ${o.discountPct}%, travada no plano grátis. Assine o Pro para ver agora.`

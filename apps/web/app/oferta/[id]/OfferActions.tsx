@@ -32,7 +32,7 @@ export function OfferActions({ id, publicLocked, storeName, url }: { id: string;
 
   const link = unlocked?.url ?? url;
   const goButton = (href: string) => (
-    <a href={href} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-lg" style={{ marginTop: 8 }} onClick={() => me && api.event('click_out', id).catch(() => undefined)}>
+    <a href={href} target="_blank" rel="noopener noreferrer" className={`btn btn-primary btn-lg ${s.buy}`} style={{ marginTop: 8 }} onClick={() => me && api.event('click_out', id).catch(() => undefined)}>
       Ir para {storeName} ↗
     </a>
   );

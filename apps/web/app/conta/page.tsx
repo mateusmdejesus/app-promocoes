@@ -31,9 +31,16 @@ export default function Conta() {
             ? `Ativo até ${new Date(me.proUntil!).toLocaleDateString('pt-BR')}. Antes de vencer, mandamos o Pix do próximo período.`
             : 'Ofertas quentes aparecem para você 1 hora depois. Com o Pro, você vê na hora e recebe o aviso.'}
         </span>
-        <Link href="/pro" className={`btn ${pro ? 'btn-light' : 'btn-signal'}`} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
-          {pro ? 'Renovar agora' : 'Assinar o Pro'}
-        </Link>
+        {/* Renovar só aparece quando falta pouco: antes disso, confunde quem já pagou. */}
+        {pro && new Date(me.proUntil!).getTime() - Date.now() > 7 * 86_400_000 ? (
+          <Link href="/ofertas" className="btn btn-light" style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+            Ver ofertas
+          </Link>
+        ) : (
+          <Link href="/pro" className={`btn ${pro ? 'btn-light' : 'btn-signal'}`} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+            {pro ? 'Renovar agora' : 'Assinar o Pro'}
+          </Link>
+        )}
       </div>
       <button className="btn btn-soft" style={{ alignSelf: 'flex-start' }} onClick={async () => { await signOut(); router.push('/'); }}>
         Sair

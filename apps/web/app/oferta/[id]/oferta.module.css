@@ -4,6 +4,8 @@
 @media (min-width: 900px) { .top { grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 56px; } }
 .photo { aspect-ratio: 1; border-radius: var(--radius-big); background: var(--stone); overflow: hidden; }
 .photo img { width: 100%; height: 100%; object-fit: contain; }
+/* No celular, a foto não pode empurrar o preço e o botão da loja para fora da tela. */
+@media (max-width: 899px) { .photo { aspect-ratio: auto; height: 240px; } .top { gap: 20px; } .price { font-size: 44px; } }
 .info { display: flex; flex-direction: column; gap: 14px; }
 .meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
 .title { margin: 0; font-size: clamp(24px, 3vw, 30px); line-height: 1.25; font-weight: 600; letter-spacing: -0.01em; }
@@ -17,3 +19,7 @@
 .lockIcon { width: 44px; height: 44px; border-radius: 22px; background: var(--ink-2); color: var(--paper); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 4px; }
 .history { margin-top: 32px; padding: 24px 28px; display: flex; flex-direction: column; gap: 12px; }
 .historyHead, .historyFoot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+/* Botão da loja sempre à vista no celular, logo acima da barra de baixo. */
+@media (max-width: 859px) {
+  .buy { position: sticky; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 10; box-shadow: 0 10px 28px rgba(22, 19, 15, 0.22); }
+}
