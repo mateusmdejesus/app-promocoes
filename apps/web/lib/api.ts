@@ -48,10 +48,18 @@ export class ApiError extends Error {
 }
 
 const TOKEN_KEY = 'keropromo.token';
+/** Cookie só de sinal (sem o token): avisa o servidor do site que a pessoa entrou (ver middleware.ts). */
+export const SIGNED_IN_COOKIE = 'kp_in';
 export const token = {
   get: () => (typeof window === 'undefined' ? null : window.localStorage.getItem(TOKEN_KEY)),
-  set: (t: string) => window.localStorage.setItem(TOKEN_KEY, t),
-  clear: () => window.localStorage.removeItem(TOKEN_KEY),
+  set: (t: string) => {
+    window.localStorage.setItem(TOKEN_KEY, t);
+    document.cookie = `${SIGNED_IN_COOKIE}=1; path=/; max-age=31536000; samesite=lax; secure`;
+  },
+  clear: () => {
+    window.localStorage.removeItem(TOKEN_KEY);
+    document.cookie = `${SIGNED_IN_COOKIE}=; path=/; max-age=0; samesite=lax; secure`;
+  },
 };
 
 export async function call<T>(method: string, path: string, body?: unknown, init?: { auth?: boolean; revalidate?: number }): Promise<T> {

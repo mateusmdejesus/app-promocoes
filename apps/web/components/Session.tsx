@@ -24,6 +24,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
     try {
       const m = await api.me();
+      // Grava de novo o login (e o cookie de "entrou") para quem entrou antes do cookie existir.
+      if (m.identified) token.set(token.get()!);
       setMe(m);
       return m;
     } catch {

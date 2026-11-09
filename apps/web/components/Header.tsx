@@ -9,19 +9,21 @@ import styles from './Header.module.css';
 export function Header() {
   const { me, ready } = useSession();
   const pro = me?.plan === 'pro';
+  const signedIn = ready && !!me?.identified;
   return (
     <header className={`${styles.header} dark`}>
       <div className={`container ${styles.row}`}>
-        <Link href="/" aria-label="keropromo, início" className={styles.logo}>
+        {/* Quem entrou tem a vitrine como início; a landing é só para quem ainda não entrou. */}
+        <Link href={signedIn ? '/ofertas' : '/'} aria-label="keropromo, início" className={styles.logo}>
           <Logo />
         </Link>
         <nav className={styles.nav} aria-label="Principal">
           <Link href="/ofertas">Ofertas</Link>
-          <Link href="/#como-funciona">Como funciona</Link>
-          <Link href="/pro">Preços</Link>
+          {signedIn ? null : <Link href="/#como-funciona">Como funciona</Link>}
+          {pro ? null : <Link href="/pro">Preços</Link>}
         </nav>
         <div className={styles.right}>
-          {ready && me?.identified ? (
+          {signedIn ? (
             <>
               {pro ? <span className={styles.proBadge}>PRO</span> : null}
               <Link href="/conta" className={styles.textLink}>
