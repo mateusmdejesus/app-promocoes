@@ -11,7 +11,13 @@ import type { Api } from './api';
  * Sem chave, e com EXPO_PUBLIC_DEV_PURCHASES=1, a compra é simulada pela API
  * (só funciona se a API tiver ALLOW_DEV_PURCHASES=1). Serve para testar antes das lojas.
  */
-const KEY = Platform.select({ ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY, android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY });
+const STORE_KEY = Platform.select({ ios: process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY, android: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY });
+/**
+ * Test Store do RevenueCat: compra simulada, sem App Store/Google Play.
+ * Só entra quando não há chave de loja real, para nunca ir parar numa versão publicada.
+ */
+const TEST_KEY = process.env.EXPO_PUBLIC_REVENUECAT_TEST_KEY;
+const KEY = STORE_KEY || TEST_KEY || undefined;
 const DEV = process.env.EXPO_PUBLIC_DEV_PURCHASES === '1';
 
 let configured = false;
@@ -21,7 +27,7 @@ export type PurchaseResult = 'purchased' | 'cancelled';
 export const billing = {
   /** true quando dá para comprar (loja real ou modo de teste). */
   available: !!KEY || DEV,
-  mode: KEY ? ('store' as const) : DEV ? ('dev' as const) : ('off' as const),
+  mode: STORE_KEY ? ('store' as const) : TEST_KEY ? ('test' as const) : DEV ? ('dev' as const) : ('off' as const),
 
   /** Liga as compras ao id da conta: é ele que chega no webhook. */
   async identify(userId: string) {
