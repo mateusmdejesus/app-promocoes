@@ -11,13 +11,18 @@ import type { ListingSnapshot, StoreAdapter } from './types';
  * 2. Busca por termo, se estiver liberada.
  * Uma fonte com erro não derruba as outras; só dá erro se nada funcionar.
  */
-const HIGHLIGHTS: Array<{ id: string; category: Category }> = [
+/**
+ * `expand`: também lê as subcategorias (até esse número), com menos produtos em cada.
+ * Usado em Eletro e Casa, para a aba "Casa e eletro" ter geladeira, lavadora, fogão, TV etc.
+ */
+const HIGHLIGHTS: Array<{ id: string; category: Category; expand?: number }> = [
   { id: 'MLB1000', category: 'eletronicos' }, // Eletrônicos, áudio e vídeo
   { id: 'MLB1051', category: 'eletronicos' }, // Celulares e telefones
   { id: 'MLB1648', category: 'eletronicos' }, // Informática
   { id: 'MLB1144', category: 'games' },
-  { id: 'MLB5726', category: 'casa' }, // Eletrodomésticos
-  { id: 'MLB1574', category: 'casa' }, // Casa, móveis e decoração
+  { id: 'MLB5726', category: 'eletro', expand: 12 }, // Eletrodomésticos (geladeira, lavadora, fogão...)
+  { id: 'MLB1002', category: 'eletro' }, // Televisores
+  { id: 'MLB1574', category: 'casa', expand: 8 }, // Casa, móveis e decoração (inclui cozinha)
   { id: 'MLB1430', category: 'moda' }, // Calçados, roupas e bolsas
   { id: 'MLB1246', category: 'beleza' },
   { id: 'MLB1276', category: 'esporte' },
@@ -60,6 +65,7 @@ interface MlProductItem {
 }
 
 const MAX_PRODUCTS_PER_CATEGORY = 20;
+const MAX_PRODUCTS_PER_SUBCATEGORY = 10;
 
 interface MlProduct {
   id: string;
@@ -120,10 +126,22 @@ export class MercadoLivreAdapter implements StoreAdapter {
    * vem de /products/{id}/items (anúncios do produto de catálogo) e o nome e a foto de
    * /products/{id}. USER_PRODUCT (MLBU...) também dá 403 e fica de fora.
    */
-  private async fromHighlights(cat: { id: string; category: Category }): Promise<ListingSnapshot[]> {
+  /** Subcategorias de uma categoria (mudam pouco: guardadas). */
+  private children = new Map<string, string[]>();
+  private async subcategories(id: string, max: number): Promise<string[]> {
+    let ids = this.children.get(id);
+    if (!ids) {
+      const c = await this.get<{ children_categories?: Array<{ id: string }> }>(`/categories/${id}`);
+      ids = (c.children_categories ?? []).map((x) => x.id);
+      this.children.set(id, ids);
+    }
+    return ids.slice(0, max);
+  }
+
+  private async fromHighlights(cat: { id: string; category: Category }, max = MAX_PRODUCTS_PER_CATEGORY): Promise<ListingSnapshot[]> {
     const h = await this.get<{ content?: Array<{ id: string; type: string }> }>(`/highlights/MLB/category/${cat.id}`);
     const content = h.content ?? [];
-    const ids = [...new Set(content.filter((c) => c.type === 'PRODUCT').map((c) => c.id))].slice(0, MAX_PRODUCTS_PER_CATEGORY);
+    const ids = [...new Set(content.filter((c) => c.type === 'PRODUCT').map((c) => c.id))].slice(0, max);
     const out: ListingSnapshot[] = [];
     let failures = 0;
     let sample = '';
@@ -183,6 +201,23 @@ export class MercadoLivreAdapter implements StoreAdapter {
         for (const l of await this.fromHighlights(cat)) byId.set(l.externalId, l);
       } catch (e) {
         errors.push(`destaques ${cat.id}: ${(e as Error).message}`);
+      }
+      if (!cat.expand) continue;
+      let subs: string[] = [];
+      try {
+        subs = await this.subcategories(cat.id, cat.expand);
+      } catch (e) {
+        errors.push(`subcategorias ${cat.id}: ${(e as Error).message}`);
+      }
+      for (const sub of subs) {
+        if (this.rateLimited) break;
+        try {
+          for (const l of await this.fromHighlights({ id: sub, category: cat.category }, MAX_PRODUCTS_PER_SUBCATEGORY)) {
+            if (!byId.has(l.externalId)) byId.set(l.externalId, l);
+          }
+        } catch (e) {
+          errors.push(`destaques ${sub}: ${(e as Error).message}`);
+        }
       }
     }
     for (const s of SEARCHES) {

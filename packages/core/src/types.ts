@@ -12,6 +12,7 @@ export const STORE_NAMES: Record<StoreId, string> = {
 
 export const CATEGORIES = [
   'eletronicos',
+  'eletro',
   'casa',
   'moda',
   'beleza',
@@ -26,6 +27,7 @@ export type Category = (typeof CATEGORIES)[number];
 
 export const CATEGORY_NAMES: Record<Category, string> = {
   eletronicos: 'Eletrônicos',
+  eletro: 'Eletro e TV',
   casa: 'Casa e cozinha',
   moda: 'Moda',
   beleza: 'Beleza',
@@ -36,6 +38,9 @@ export const CATEGORY_NAMES: Record<Category, string> = {
   pet: 'Pet',
   livros: 'Livros',
 };
+
+/** Aba "Casa e eletro" da vitrine: TV, eletrodomésticos e cozinha (pensada para um público mais velho). */
+export const HOME_TAB_CATEGORIES: readonly Category[] = ['eletro', 'casa'];
 
 /** Valores monetários sempre em centavos (inteiros), nunca float. */
 export type Cents = number;

@@ -54,19 +54,27 @@ function scored(repo: Repo, offers: OfferRow[], now: Date) {
 }
 
 /** "Quentes agora": as melhores ofertas de 40% ou mais, iguais para todos. */
-export function hotOffers(repo: Repo, plan: Plan, now: Date, limit = 10): OfferDTO[] {
-  return scored(repo, repo.activeOffers({ tier: 'hot' }), now)
+export function hotOffers(repo: Repo, plan: Plan, now: Date, limit = 10, categories?: readonly Category[]): OfferDTO[] {
+  const offers = repo.activeOffers({ tier: 'hot' }).filter((o) => !categories || categories.includes(o.product.category));
+  return scored(repo, offers, now)
     .sort((a, b) => b.base - a.base)
     .slice(0, limit)
     .map((x) => toDTO(x.o, plan, now));
 }
 
 /** "Pra você": todas as promoções, ordenadas pelo gosto do usuário. */
-export function personalFeed(repo: Repo, userId: string, plan: Plan, now: Date, opts: { category?: Category; limit?: number } = {}): OfferDTO[] {
+export function personalFeed(
+  repo: Repo,
+  userId: string,
+  plan: Plan,
+  now: Date,
+  opts: { category?: Category; categories?: readonly Category[]; limit?: number } = {},
+): OfferDTO[] {
   const events = repo.events(userId, new Date(now.getTime() - 90 * DAY_MS));
   const affinity = categoryAffinity(repo.categories(userId), events, now);
   const terms = recentSearchTerms(events, now);
-  return scored(repo, repo.activeOffers({ category: opts.category }), now)
+  const offers = repo.activeOffers({ category: opts.category }).filter((o) => !opts.categories || opts.categories.includes(o.product.category));
+  return scored(repo, offers, now)
     .map((x) => ({ o: x.o, s: personalScore(x.base, x.o.product.category, x.o.product.title, affinity, terms) }))
     .sort((a, b) => b.s - a.s)
     .slice(0, opts.limit ?? 50)

@@ -294,12 +294,25 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
 
   // ---------- ofertas ----------
 
-  app.get('/v1/offers/hot', async (req) => ({ offers: hotOffers(repo, planOf(optionalUser(req)), clock()) }));
+  // `categories` (separadas por vírgula) filtra, ex.: a aba "Casa e eletro" do site; `limit` até 60.
+  const listQuery = z.object({
+    limit: z.coerce.number().int().min(1).max(60).optional(),
+    categories: z
+      .string()
+      .optional()
+      .transform((v) => (v ? v.split(',').filter(Boolean) : undefined))
+      .pipe(z.array(category).optional()),
+  });
+
+  app.get('/v1/offers/hot', async (req) => {
+    const q = listQuery.parse(req.query);
+    return { offers: hotOffers(repo, planOf(optionalUser(req)), clock(), q.limit ?? 10, q.categories) };
+  });
 
   app.get('/v1/feed', async (req) => {
     const userId = userOf(req);
-    const q = z.object({ category: category.optional() }).parse(req.query);
-    return { offers: personalFeed(repo, userId, planOf(userId), clock(), { category: q.category }) };
+    const q = z.object({ category: category.optional() }).and(listQuery).parse(req.query);
+    return { offers: personalFeed(repo, userId, planOf(userId), clock(), { category: q.category, categories: q.categories, limit: q.limit }) };
   });
 
   app.get('/v1/search', async (req) => {

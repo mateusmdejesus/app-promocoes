@@ -184,6 +184,25 @@ describe('lojas', () => {
   });
 });
 
+describe('vitrine', () => {
+  it('quentes e feed filtram por categoria (aba "Casa e eletro") e aceitam limite', async () => {
+    await stableHistory();
+    const now = new Date(T0 + 30 * DAY);
+    store.set('af', 'Air Fryer 4L Digital', 'casa', 24900, 51900);
+    store.set('fone', 'Fone Bluetooth Over-ear', 'eletronicos', 14900, 28900);
+    await runMonitor(repo, [store], sender, now);
+    const app = serverAt(now);
+    const hot = async (qs: string) => (await app.inject({ method: 'GET', url: `/v1/offers/hot${qs}` })).json().offers as Array<{ category: string }>;
+    expect((await hot('')).length).toBe(2);
+    expect((await hot('?categories=eletro,casa')).map((o) => o.category)).toEqual(['casa']);
+    expect((await hot('?limit=1')).length).toBe(1);
+    expect((await app.inject({ method: 'GET', url: '/v1/offers/hot?categories=nada' })).statusCode).toBe(400);
+    const u = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
+    const feed = (await app.inject({ method: 'GET', url: '/v1/feed?categories=eletro,casa', headers: { authorization: `Bearer ${u.secret}` } })).json();
+    expect(feed.offers.map((o: { category: string }) => o.category)).toEqual(['casa']);
+  });
+});
+
 describe('contas', () => {
   it('login por e-mail com código: conta anônima vira a conta da pessoa e mantém os interesses', async () => {
     const app = serverAt();
