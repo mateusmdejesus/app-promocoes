@@ -34,6 +34,12 @@ export async function registerForPush(): Promise<string | null> {
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
   if (!projectId) return null;
-  const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
-  return data;
+  try {
+    const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
+    return data;
+  } catch {
+    // Android sem Firebase configurado (google-services.json) não gera token.
+    // Notificação nunca pode travar o cadastro: segue sem push.
+    return null;
+  }
 }
