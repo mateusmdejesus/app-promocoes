@@ -96,9 +96,9 @@ export class MercadoLivreAdapter implements StoreAdapter {
     const content = h.content ?? [];
     const out: ListingSnapshot[] = [];
     const ids = [...new Set(content.map((c) => c.id))];
+    const seen = new Set<string>();
 
-    // 1) Tenta cada ID como anúncio (/items). Os destaques trazem PRODUCT e USER_PRODUCT,
-    //    mas alguns IDs também são anúncios; o que não for anúncio cai no passo 2.
+    // 1) IDs que são anúncios (/items).
     const asItem = new Set<string>();
     for (let i = 0; i < ids.length; i += 20) {
       const batch = ids.slice(i, i + 20);
@@ -108,37 +108,49 @@ export class MercadoLivreAdapter implements StoreAdapter {
       rows.forEach((r, j) => {
         if (r.code === 200 && r.body && r.body.status !== 'paused' && r.body.price) {
           asItem.add(batch[j]!);
+          seen.add(r.body.id);
           out.push(this.fromItem(r.body, cat.category));
         }
       });
     }
 
-    // 2) O resto é produto de catálogo: pega o anúncio vencedor (buy_box_winner).
+    // 2) Produtos de catálogo: pega até MAX_PRODUCTS anúncios de cada um (/products/{id}/items).
+    //    USER_PRODUCT (MLBU...) dá 403 e fica de fora; 404 também é ignorado.
+    const MAX_PRODUCTS = 8;
+    const itemIds: string[] = [];
     let productErrors = 0;
     let productSample = '';
-    for (const id of ids.filter((x) => !asItem.has(x))) {
+    for (const id of ids.filter((x) => !asItem.has(x) && !x.startsWith('MLBU')).slice(0, MAX_PRODUCTS)) {
       try {
-        const p = await this.get<MlProduct>(`/products/${id}`);
-        const w = p.buy_box_winner;
-        if (!w?.price) continue;
-        out.push({
-          externalId: id,
-          title: p.name,
-          category: cat.category,
-          price: toCents(w.price),
-          listPrice: w.original_price ? toCents(w.original_price) : undefined,
-          url: this.link(p.permalink ?? `https://www.mercadolivre.com.br/p/${id}`),
-          imageUrl: https(p.pictures?.[0]?.url),
-        });
+        const res = await this.get<unknown>(`/products/${id}/items`);
+        const list = (Array.isArray(res) ? res : ((res as { results?: unknown[] }).results ?? [])) as Array<{ item_id?: string; id?: string }>;
+        for (const x of list.slice(0, 3)) {
+          const iid = x.item_id ?? x.id;
+          if (iid && !seen.has(iid)) itemIds.push(iid);
+        }
       } catch (e) {
         productErrors++;
         productSample ||= (e as Error).message;
       }
     }
 
+    // 3) Preço dos anúncios encontrados nos produtos.
+    const uniq = [...new Set(itemIds)];
+    for (let i = 0; i < uniq.length; i += 20) {
+      const batch = uniq.slice(i, i + 20);
+      const rows = await this.get<Array<{ code: number; body: MlItem }>>(
+        `/items?ids=${batch.join(',')}&attributes=id,title,price,original_price,permalink,thumbnail,status`,
+      );
+      for (const r of rows) {
+        if (r.code === 200 && r.body && r.body.status !== 'paused' && r.body.price) {
+          out.push(this.fromItem(r.body, cat.category));
+        }
+      }
+    }
+
     if (out.length === 0) {
       const types = [...new Set(content.map((c) => c.type))].join(',') || 'nenhum';
-      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; falhas em /products: ${productErrors}${productSample ? ` ex.: ${productSample}` : ''})`);
+      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; falhas em /products/items: ${productErrors}${productSample ? ` ex.: ${productSample}` : ''})`);
     }
     return out;
   }
