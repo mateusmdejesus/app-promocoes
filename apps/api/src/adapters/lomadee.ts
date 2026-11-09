@@ -50,7 +50,8 @@ interface LmdOption {
   available?: boolean;
   seller?: string;
   images?: LmdImage[];
-  pricing?: Array<{ listPrice?: number | null; price?: number | null }>;
+  /** Em reais. Às vezes vem como texto ("259.90"). */
+  pricing?: Array<{ listPrice?: number | string | null; price?: number | string | null }>;
 }
 export interface LmdProduct {
   id: string;
@@ -65,37 +66,44 @@ export interface LmdProduct {
 export interface LomadeeOptions {
   apiKey: string;
   fetchImpl?: typeof fetch;
-  /** Para o log da primeira varredura (conferir unidade de preço e lojas). */
+  /** Para o log da primeira varredura (conferir preços e lojas). */
   log?: (msg: string) => void;
+  /** Pausa entre chamadas, para ficar abaixo de 60 por minuto (padrão 1,1 s; 0 nos testes). */
+  delayMs?: number;
 }
 
 const API = 'https://api.lomadee.com.br';
 
-/**
- * A documentação usa centavos nos filtros de preço, mas o exemplo de resposta não diz a unidade.
- * Regra: se algum preço do lote tem casas decimais, o lote está em reais; senão, em centavos.
- */
-export function pricesInReais(products: LmdProduct[]): boolean {
-  for (const p of products)
-    for (const o of p.options ?? [])
-      for (const pr of o.pricing ?? []) {
-        if (pr.price != null && !Number.isInteger(pr.price)) return true;
-        if (pr.listPrice != null && !Number.isInteger(pr.listPrice)) return true;
-      }
-  return false;
+/** Reais (número ou texto) para centavos; 0 quando não dá para ler. Conferido na API real: sempre reais. */
+const cents = (v: number | string | null | undefined): number => {
+  const n = typeof v === 'string' ? Number(v.replace(',', '.')) : (v ?? 0);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+};
+
+const KNOWN_HOSTS: Record<string, string> = { 'shopee.com.br': 'Shopee' };
+
+/** Nome da loja pelo endereço do produto, quando a lista de marcas não tem a loja. */
+export function storeFromUrl(url: string): string | undefined {
+  try {
+    const host = new URL(url).hostname.replace(/^(www|loja|shop)\./, '');
+    if (KNOWN_HOSTS[host]) return KNOWN_HOSTS[host];
+    const label = host.split('.')[0];
+    return label ? label.charAt(0).toUpperCase() + label.slice(1) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
-/** Melhor oferta de um produto: a opção disponível mais barata. */
-export function toListing(p: LmdProduct, category: Category, reais: boolean): ListingSnapshot | null {
+/** Melhor oferta de um produto: a opção disponível mais barata. `store` é o nome da loja (marca). */
+export function toListing(p: LmdProduct, category: Category, store?: string): ListingSnapshot | null {
   if (p.available === false || !p.url) return null;
-  const cents = (v: number) => (reais ? Math.round(v * 100) : Math.round(v));
   let best: { price: number; list?: number; opt: LmdOption } | null = null;
   for (const opt of p.options ?? []) {
     if (opt.available === false) continue;
     for (const pr of opt.pricing ?? []) {
-      if (!pr.price || pr.price <= 0) continue;
       const price = cents(pr.price);
-      if (!best || price < best.price) best = { price, list: pr.listPrice ? cents(pr.listPrice) : undefined, opt };
+      if (!price) continue;
+      if (!best || price < best.price) best = { price, list: cents(pr.listPrice) || undefined, opt };
     }
   }
   if (!best) return null;
@@ -108,30 +116,58 @@ export function toListing(p: LmdProduct, category: Category, reais: boolean): Li
     listPrice: best.list && best.list > best.price ? best.list : undefined,
     url: p.url,
     imageUrl: image?.replace(/^http:/, 'https:'),
-    seller: best.opt.seller?.trim() || undefined,
+    // A loja é a marca da Lomadee (ex.: Shopee); `option.seller` é o vendedor dentro dela.
+    seller: store ?? storeFromUrl(p.url),
   };
 }
 
 export class LomadeeAdapter implements StoreAdapter {
   store = 'lomadee' as const;
   private logged = false;
+  /** organizationId -> nome da marca (loja), renovado a cada 24 h. */
+  private brands: { at: number; names: Map<string, string> } | null = null;
   constructor(private opts: LomadeeOptions) {}
 
-  private async search(q: string): Promise<LmdProduct[]> {
+  private lastCall = 0;
+  private async get<T>(path: string): Promise<T> {
+    const wait = this.lastCall + (this.opts.delayMs ?? 1100) - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    this.lastCall = Date.now();
     const f = this.opts.fetchImpl ?? fetch;
-    const url = `${API}/affiliate/products?search=${encodeURIComponent(q)}&isAvailable=true&limit=${PER_SEARCH}&page=1`;
-    const res = await f(url, { headers: { 'x-api-key': this.opts.apiKey, Accept: 'application/json' } });
+    const res = await f(`${API}${path}`, { headers: { 'x-api-key': this.opts.apiKey, Accept: 'application/json' } });
     if (!res.ok) {
       const body = (await res.text().catch(() => '')).slice(0, 160);
-      throw new Error(`${res.status} em /affiliate/products ${body}`);
+      throw new Error(`${res.status} em ${path.split('?')[0]} ${body}`);
     }
-    const json = (await res.json()) as { data?: LmdProduct[] };
+    return (await res.json()) as T;
+  }
+
+  private async search(q: string): Promise<LmdProduct[]> {
+    const json = await this.get<{ data?: LmdProduct[] }>(`/affiliate/products?search=${encodeURIComponent(q)}&isAvailable=true&limit=${PER_SEARCH}&page=1`);
     return json.data ?? [];
+  }
+
+  /** Nomes das lojas (escopo brands:read). Sem ele, o nome sai do endereço do produto. */
+  private async brandNames(): Promise<Map<string, string>> {
+    if (this.brands && Date.now() - this.brands.at < 86_400_000) return this.brands.names;
+    const names = new Map<string, string>();
+    try {
+      for (let page = 1; page <= 15; page++) {
+        const r = await this.get<{ data?: Array<{ id: string; name: string }>; pagination?: { totalPages?: number } }>(`/affiliate/brands?limit=20&page=${page}`);
+        for (const b of r.data ?? []) if (b.id && b.name) names.set(b.id, b.name.trim());
+        if (page >= (r.pagination?.totalPages ?? 1)) break;
+      }
+    } catch (e) {
+      console.warn(`[lomadee] sem lista de marcas (${(e as Error).message}); nome da loja pelo endereço.`);
+    }
+    this.brands = { at: Date.now(), names };
+    return names;
   }
 
   async fetchListings(): Promise<ListingSnapshot[]> {
     const byId = new Map<string, ListingSnapshot>();
     const errors: string[] = [];
+    const brands = await this.brandNames();
     for (const s of SEARCHES) {
       let products: LmdProduct[];
       try {
@@ -143,17 +179,16 @@ export class LomadeeAdapter implements StoreAdapter {
         if (/^(401|403|429)/.test(msg)) break;
         continue;
       }
-      const reais = pricesInReais(products);
       if (!this.logged && products.length > 0) {
         this.logged = true;
         const p = products[0]!;
         const pr = p.options?.[0]?.pricing?.[0];
         (this.opts.log ?? console.log)(
-          `[lomadee] exemplo: "${p.name.slice(0, 60)}" price=${pr?.price} listPrice=${pr?.listPrice} seller=${p.options?.[0]?.seller} org=${p.organizationId} (lido em ${reais ? 'reais' : 'centavos'}) url=${p.url}`,
+          `[lomadee] exemplo: "${p.name.slice(0, 60)}" price=${pr?.price} listPrice=${pr?.listPrice} loja=${brands.get(p.organizationId ?? '') ?? storeFromUrl(p.url ?? '')} url=${p.url}`,
         );
       }
       for (const p of products) {
-        const l = toListing(p, s.category, reais);
+        const l = toListing(p, s.category, brands.get(p.organizationId ?? ''));
         if (l && !byId.has(l.externalId)) byId.set(l.externalId, l);
       }
     }
