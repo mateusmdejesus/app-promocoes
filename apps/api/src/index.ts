@@ -9,7 +9,7 @@ import { seedDemoHistory } from './seedDemo';
 import { buildServer } from './server';
 
 const db = openDb(config.databasePath);
-const repo = new Repo(db);
+const repo = new Repo(db, { proEmails: config.proEmails });
 const adapters = buildAdapters(db);
 const sender = new ExpoPushSender();
 

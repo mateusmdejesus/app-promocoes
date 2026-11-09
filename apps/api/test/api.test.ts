@@ -194,6 +194,18 @@ describe('contas', () => {
     expect((await app.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: 'ana@exemplo.com', code } })).statusCode).toBe(400);
   });
 
+  it('conta da casa (PRO_EMAILS) é Pro sem pagamento; as outras continuam grátis', async () => {
+    repo = new Repo(openDb(':memory:'), { proEmails: [' Casa@X.com '] });
+    const app = serverAt(new Date(T0));
+    const login = async (addr: string) => {
+      await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: addr } });
+      const r = (await app.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: addr, code: email.last.get(addr) } })).json();
+      return (await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${r.token}` } })).json();
+    };
+    expect(await login('casa@x.com')).toMatchObject({ plan: 'pro' });
+    expect(await login('outra@x.com')).toMatchObject({ plan: 'free' });
+  });
+
   it('entrar de novo em outro aparelho cai na mesma conta; Apple com o mesmo e-mail também', async () => {
     const app = serverAt(new Date(T0));
     await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: 'bia@x.com' } });

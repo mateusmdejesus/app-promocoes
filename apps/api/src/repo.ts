@@ -21,7 +21,19 @@ const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /** Todas as consultas ao banco ficam aqui. */
 export class Repo {
-  constructor(private db: DB) {}
+  /**
+   * `proEmails`: contas da casa (equipe, testes) que são sempre Pro, sem pagamento.
+   * Vem da variável PRO_EMAILS; nunca de algo que o usuário possa mandar.
+   */
+  private proEmails: Set<string>;
+  constructor(
+    private db: DB,
+    opts: { proEmails?: string[]; now?: () => number } = {},
+  ) {
+    this.proEmails = new Set((opts.proEmails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean));
+    this.now = opts.now ?? Date.now;
+  }
+  private now: () => number;
 
   // ---------- produtos e preços ----------
 
@@ -147,7 +159,11 @@ export class Repo {
   account(userId: string): { email?: string; hasApple: boolean; proUntil?: Date } | undefined {
     const r = this.db.prepare('SELECT email, apple_sub, pro_until FROM users WHERE id = ?').get(userId) as Row | undefined;
     if (!r) return undefined;
-    return { email: (r.email ?? undefined) as string | undefined, hasApple: r.apple_sub != null, proUntil: r.pro_until == null ? undefined : new Date(n(r.pro_until)) };
+    const email = (r.email ?? undefined) as string | undefined;
+    let proUntil = r.pro_until == null ? undefined : new Date(n(r.pro_until));
+    // Conta da casa: Pro sempre, renovado a cada consulta (1 ano à frente).
+    if (email && this.proEmails.has(email.toLowerCase())) proUntil = new Date(this.now() + 365 * 86_400_000);
+    return { email, hasApple: r.apple_sub != null, proUntil };
   }
 
   /** Conta anônima que ainda não tem e-mail nem Apple pode receber a identidade. */
