@@ -26,7 +26,8 @@ export function Header() {
           {signedIn ? (
             <>
               {pro ? <span className={styles.proBadge}>PRO</span> : null}
-              <Link href="/conta" className={styles.textLink}>
+              {/* No celular, "Minha conta" e "Seja Pro" ficam na barra de baixo (MobileNav). */}
+              <Link href="/conta" className={`${styles.textLink} ${styles.desktopOnly}`}>
                 Minha conta
               </Link>
             </>
@@ -36,7 +37,7 @@ export function Header() {
             </Link>
           )}
           {!pro ? (
-            <Link href="/pro" className="btn btn-signal" style={{ height: 40, padding: '0 16px', borderRadius: 20, fontSize: 15 }}>
+            <Link href="/pro" className={`btn btn-signal ${signedIn ? styles.desktopOnly : ''}`} style={{ height: 40, padding: '0 16px', borderRadius: 20, fontSize: 15 }}>
               Seja Pro
             </Link>
           ) : null}

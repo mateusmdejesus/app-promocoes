@@ -5,3 +5,22 @@
 .listHead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .rows { display: grid; gap: 12px 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+
+/* Celular: quentes numa faixa que desliza para o lado; o resto em 2 colunas. */
+.rail { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 calc(-1 * var(--gutter)); padding: 2px var(--gutter) 8px; scrollbar-width: none; overscroll-behavior-x: contain; }
+.rail::-webkit-scrollbar { display: none; }
+.rail > * { flex: 0 0 148px; scroll-snap-align: start; }
+.railWide { gap: 20px; padding-bottom: 12px; scrollbar-width: thin; }
+.railWide::-webkit-scrollbar { display: block; height: 6px; }
+.railWide::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.railWide > * { flex: 0 0 280px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mobileOnly { display: none; }
+@media (max-width: 859px) {
+  .desktopOnly { display: none; }
+  .mobileOnly { display: flex; }
+  .tiles.mobileOnly { display: grid; }
+  .chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 calc(-1 * var(--gutter)); padding: 0 var(--gutter) 4px; scrollbar-width: none; width: calc(100% + 2 * var(--gutter)); }
+  .chips::-webkit-scrollbar { display: none; }
+  .chips > * { flex-shrink: 0; }
+}

@@ -83,3 +83,42 @@ export function OfferRow({ offer }: { offer: Offer }) {
     </Link>
   );
 }
+
+/**
+ * Card compacto do celular: foto quadrada com o desconto no canto, preço grande e o
+ * "de" riscado embaixo. Usado na faixa lateral das quentes e na grade de 2 colunas.
+ */
+export function OfferTile({ offer }: { offer: Offer }) {
+  const open = offer.price != null && offer.referencePrice != null;
+  return (
+    <Link href={href(offer)} className={`card ${styles.tile}`} aria-label={label(offer)}>
+      <div className={styles.tilePhoto}>
+        {offer.imageUrl ? <img src={offer.imageUrl} alt="" loading="lazy" /> : null}
+        {offer.tier !== 'none' ? (
+          <span className={`${styles.tileBadge} ${offer.tier === 'hot' ? styles.tileBadgeHot : ''}`}>−{offer.discountPct}%</span>
+        ) : null}
+      </div>
+      <div className={styles.tileBody}>
+        <span className={styles.tileTitle}>{offer.title}</span>
+        {open ? (
+          <>
+            <span className={`price ${styles.tilePrice}`}>{brl(offer.price!)}</span>
+            <span className="strike" style={{ fontSize: 12 }}>
+              {brl(offer.referencePrice!)}
+            </span>
+          </>
+        ) : (
+          <span className={styles.tileLocked}>
+            <span className={styles.blurred} aria-hidden="true">
+              R$ 000
+            </span>
+            <span className="pill-lock">
+              <LockIcon size={12} />
+              {offer.unlocksAt ? unlockLabel(offer.unlocksAt) : 'Só no Pro'}
+            </span>
+          </span>
+        )}
+      </div>
+    </Link>
+  );
+}

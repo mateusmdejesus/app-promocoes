@@ -24,3 +24,16 @@
 .rowPrice { font-size: 20px; }
 .rowFoot .locked { margin-top: 0; }
 .rowFoot .blurred { font-size: 18px; }
+
+.tile { display: flex; flex-direction: column; overflow: hidden; text-decoration: none; }
+.tile:active { transform: scale(0.98); }
+.tilePhoto { position: relative; aspect-ratio: 1; background: #fff; }
+.tilePhoto img { width: 100%; height: 100%; object-fit: contain; padding: 6px; }
+.tileBadge { position: absolute; left: 8px; bottom: 8px; padding: 2px 7px; border-radius: 8px; font-size: 13px; font-weight: 700; background: var(--paper); color: var(--ink); border: 1px solid var(--line); }
+.tileBadgeHot { background: var(--signal); color: var(--ink); border-color: var(--signal); }
+.tileBody { padding: 8px 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.tileTitle { font-size: 13px; line-height: 1.3; color: var(--ink-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.6em; }
+.tilePrice { font-size: 20px; margin-top: 2px; }
+.tileLocked { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 2px; }
+.tileLocked .blurred { font-size: 18px; }
+.tileLocked :global(.pill-lock) { font-size: 11px; padding: 3px 8px; white-space: nowrap; }
