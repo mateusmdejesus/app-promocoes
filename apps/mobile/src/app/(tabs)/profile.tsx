@@ -12,7 +12,7 @@ import { useSession } from '../../session';
 import { color, font, gutter, radius, type } from '../../theme';
 
 /** Páginas legais. Trocar pelo domínio definitivo antes de publicar. */
-const LEGAL_URL = 'https://keropromo.app';
+const LEGAL_URL = 'https://keropromo.com.br';
 const MANAGE_URL = Platform.OS === 'ios' ? 'https://apps.apple.com/account/subscriptions' : 'https://play.google.com/store/account/subscriptions';
 
 export default function Profile() {

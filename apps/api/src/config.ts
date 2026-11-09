@@ -16,7 +16,7 @@ export const config = {
   lomadeeApiKey: process.env.LOMADEE_API_KEY ?? '',
   appleBundleId: process.env.APPLE_BUNDLE_ID ?? '',
   resendApiKey: process.env.RESEND_API_KEY ?? '',
-  emailFrom: process.env.EMAIL_FROM ?? 'keropromo <acesso@keropromo.app>',
+  emailFrom: process.env.EMAIL_FROM ?? 'keropromo <acesso@keropromo.com.br>',
   revenuecatWebhookAuth: process.env.REVENUECAT_WEBHOOK_AUTH ?? '',
   allowDevPurchases: process.env.ALLOW_DEV_PURCHASES === '1',
   mpAccessToken: process.env.MP_ACCESS_TOKEN ?? '',

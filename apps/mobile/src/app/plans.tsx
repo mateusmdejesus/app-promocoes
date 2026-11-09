@@ -12,7 +12,7 @@ import { PressableScale } from '../components/PressableScale';
 import { useSession } from '../session';
 import { color, font, gutter, radius, type } from '../theme';
 
-const LEGAL_URL = 'https://keropromo.app';
+const LEGAL_URL = 'https://keropromo.com.br';
 const SAVING_PCT = Math.round((1 - PRICES.yearly / (PRICES.monthly * 12)) * 100);
 
 const ROWS: Array<{ label: string; free: string; pro: string }> = [

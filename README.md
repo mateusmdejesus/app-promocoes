@@ -103,5 +103,5 @@ libera o Pro direto pela API. Sem `RESEND_API_KEY`, o código de login aparece n
    (`RESEND_API_KEY`) com domínio verificado para enviar os códigos.
 4. Criar o projeto no EAS (`npx eas-cli init`) para ter o `projectId`: sem ele o app não recebe push.
 5. Hospedar a API (qualquer servidor Node 22) e, com mais usuários, trocar o SQLite por Postgres.
-6. Publicar páginas de Termos e Privacidade (o app aponta para keropromo.app/termos e /privacidade).
+6. Publicar páginas de Termos e Privacidade (o app e o site apontam para keropromo.com.br/termos e /privacidade).
 7. Contas de desenvolvedor Apple (US$ 99/ano) e Google Play (US$ 25 uma vez).
