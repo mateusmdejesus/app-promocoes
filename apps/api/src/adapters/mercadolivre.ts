@@ -44,6 +44,16 @@ interface MlItem {
   status?: string;
 }
 
+/** Anúncio dentro de um produto de catálogo (/products/{id}/items). */
+interface MlProductItem {
+  item_id: string;
+  price: number;
+  original_price?: number | null;
+  condition?: string;
+}
+
+const MAX_PRODUCTS_PER_CATEGORY = 12;
+
 interface MlProduct {
   id: string;
   name: string;
@@ -91,70 +101,44 @@ export class MercadoLivreAdapter implements StoreAdapter {
     };
   }
 
+  /**
+   * Mais vendidos da categoria. Para a nossa aplicação, /items responde 403, então o preço
+   * vem de /products/{id}/items (anúncios do produto de catálogo) e o nome e a foto de
+   * /products/{id}. USER_PRODUCT (MLBU...) também dá 403 e fica de fora.
+   */
   private async fromHighlights(cat: { id: string; category: Category }): Promise<ListingSnapshot[]> {
     const h = await this.get<{ content?: Array<{ id: string; type: string }> }>(`/highlights/MLB/category/${cat.id}`);
     const content = h.content ?? [];
+    const ids = [...new Set(content.filter((c) => c.type === 'PRODUCT').map((c) => c.id))].slice(0, MAX_PRODUCTS_PER_CATEGORY);
     const out: ListingSnapshot[] = [];
-    const ids = [...new Set(content.map((c) => c.id))];
-    const seen = new Set<string>();
+    let failures = 0;
+    let sample = '';
 
-    // 1) IDs que são anúncios (/items).
-    const asItem = new Set<string>();
-    for (let i = 0; i < ids.length; i += 20) {
-      const batch = ids.slice(i, i + 20);
-      const rows = await this.get<Array<{ code: number; body: MlItem }>>(
-        `/items?ids=${batch.join(',')}&attributes=id,title,price,original_price,permalink,thumbnail,status`,
-      );
-      rows.forEach((r, j) => {
-        if (r.code === 200 && r.body && r.body.status !== 'paused' && r.body.price) {
-          asItem.add(batch[j]!);
-          seen.add(r.body.id);
-          out.push(this.fromItem(r.body, cat.category));
-        }
-      });
-    }
-
-    // 2) Produtos de catálogo: pega até MAX_PRODUCTS anúncios de cada um (/products/{id}/items).
-    //    USER_PRODUCT (MLBU...) dá 403 e fica de fora; 404 também é ignorado.
-    const MAX_PRODUCTS = 8;
-    const itemIds: string[] = [];
-    let productErrors = 0;
-    let productSample = '';
-    let rawProduct = '';
-    let rawPrices = '';
-    for (const id of ids.filter((x) => !asItem.has(x) && !x.startsWith('MLBU')).slice(0, MAX_PRODUCTS)) {
+    for (const id of ids) {
       try {
-        const res = await this.get<unknown>(`/products/${id}/items`);
-        rawProduct ||= JSON.stringify(res).slice(0, 300);
-        const list = (Array.isArray(res) ? res : ((res as { results?: unknown[] }).results ?? [])) as Array<{ item_id?: string; id?: string }>;
-        for (const x of list.slice(0, 3)) {
-          const iid = x.item_id ?? x.id;
-          if (iid && !seen.has(iid)) itemIds.push(iid);
-        }
+        const offers = await this.get<{ results?: MlProductItem[] }>(`/products/${id}/items`);
+        const active = (offers.results ?? []).filter((o) => o.price > 0 && (o.condition ?? 'new') === 'new');
+        if (active.length === 0) continue;
+        const best = active.reduce((m, o) => (o.price < m.price ? o : m));
+        const p = await this.get<MlProduct>(`/products/${id}`);
+        out.push({
+          externalId: id,
+          title: p.name,
+          category: cat.category,
+          price: toCents(best.price),
+          listPrice: best.original_price ? toCents(best.original_price) : undefined,
+          url: this.link(p.permalink ?? `https://www.mercadolivre.com.br/p/${id}`),
+          imageUrl: https(p.pictures?.[0]?.url),
+        });
       } catch (e) {
-        productErrors++;
-        productSample ||= (e as Error).message;
-      }
-    }
-
-    // 3) Preço dos anúncios encontrados nos produtos.
-    const uniq = [...new Set(itemIds)];
-    for (let i = 0; i < uniq.length; i += 20) {
-      const batch = uniq.slice(i, i + 20);
-      const rows = await this.get<Array<{ code: number; body: MlItem }>>(
-        `/items?ids=${batch.join(',')}&attributes=id,title,price,original_price,permalink,thumbnail,status`,
-      );
-      rawPrices ||= JSON.stringify(rows).slice(0, 300);
-      for (const r of rows) {
-        if (r.code === 200 && r.body && r.body.status !== 'paused' && r.body.price) {
-          out.push(this.fromItem(r.body, cat.category));
-        }
+        failures++;
+        sample ||= (e as Error).message;
       }
     }
 
     if (out.length === 0) {
       const types = [...new Set(content.map((c) => c.type))].join(',') || 'nenhum';
-      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; falhas em /products/items: ${productErrors}${productSample ? ` ex.: ${productSample}` : ''}; anúncios achados: ${uniq.length}; /products/items: ${rawProduct || '-'}; /items: ${rawPrices || '-'})`);
+      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; falhas: ${failures}${sample ? ` ex.: ${sample}` : ''})`);
     }
     return out;
   }

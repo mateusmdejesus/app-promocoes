@@ -17,16 +17,19 @@ function fakeMl() {
     }
     if (url.includes('/sites/MLB/search')) return new Response('forbidden', { status: 403 });
     if (url.includes('/highlights/MLB/category/MLB1000')) {
-      return Response.json({ content: [{ id: 'MLB1', type: 'ITEM' }, { id: 'MLB9', type: 'PRODUCT' }] });
+      return Response.json({ content: [{ id: 'MLB1', type: 'ITEM' }, { id: 'MLB9', type: 'PRODUCT' }, { id: 'MLBU7', type: 'USER_PRODUCT' }] });
     }
     if (url.includes('/highlights/')) return Response.json({ content: [] });
-    if (url.includes('/items?ids=MLB1,')) return Response.json([{ code: 200, body: { id: 'MLB1', title: 'Air fryer 4L', price: 249, original_price: 519, permalink: 'https://ml/1', thumbnail: 'http://img/1' } }, { code: 404, body: null }]);
-    if (url.includes('/items?ids=MLB1&')) {
-      return Response.json([{ code: 200, body: { id: 'MLB1', title: 'Air fryer 4L', price: 249, original_price: 519, permalink: 'https://ml/1', thumbnail: 'http://img/1' } }]);
+    if (url.includes('/items?ids=')) return new Response('forbidden', { status: 403 });
+    if (url.endsWith('/products/MLB9/items')) {
+      return Response.json({ results: [
+        { item_id: 'MLB10', price: 289, original_price: 519, condition: 'new' },
+        { item_id: 'MLB11', price: 249, original_price: 519, condition: 'new' },
+        { item_id: 'MLB12', price: 99, condition: 'used' },
+      ] });
     }
-    if (url.includes('/products/MLB9/items')) return Response.json({ results: [{ item_id: 'MLB10' }] });
-    if (url.includes('/items?ids=MLB10')) {
-      return Response.json([{ code: 200, body: { id: 'MLB10', title: 'Fone X', price: 99.9, original_price: null, permalink: 'https://ml/10', thumbnail: 'http://img/10' } }]);
+    if (url.endsWith('/products/MLB9')) {
+      return Response.json({ id: 'MLB9', name: 'Air fryer 4L', permalink: 'https://ml/p/9', pictures: [{ url: 'http://img/9' }], buy_box_winner: null });
     }
     return new Response('nope', { status: 404 });
   }) as typeof fetch;
@@ -62,9 +65,9 @@ describe('Mercado Livre: acesso renovado', () => {
     const auth = new MercadoLivreAuth({ clientId: 'id', clientSecret: 'sec', db, bootstrapRefreshToken: 'ref-0', fetchImpl: ml.fetchImpl });
     const adapter = new MercadoLivreAdapter({ auth, fetchImpl: ml.fetchImpl });
     const [a, b] = await Promise.all([adapter.fetchListings(), adapter.fetchListings()]);
-    expect(a[0]!.price).toBe(24900);
-    expect(a[0]!.imageUrl).toBe('https://img/1');
-    expect(a.find((l) => l.externalId === 'MLB10')!.price).toBe(9990);
+    // Só o produto de catálogo entra (ITEM e USER_PRODUCT são bloqueados), com o menor preço novo.
+    expect(a).toHaveLength(1);
+    expect(a[0]).toMatchObject({ externalId: 'MLB9', title: 'Air fryer 4L', price: 24900, listPrice: 51900, imageUrl: 'https://img/9', url: 'https://ml/p/9' });
     expect(b).toHaveLength(a.length);
     expect(ml.calls).toHaveLength(1);
   });
