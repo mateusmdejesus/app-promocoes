@@ -29,7 +29,7 @@ function fakeMl() {
       ] });
     }
     if (url.endsWith('/products/MLB9')) {
-      return Response.json({ id: 'MLB9', name: 'Air fryer 4L', permalink: 'https://ml/p/9', pictures: [{ url: 'http://img/9' }], buy_box_winner: null });
+      return Response.json({ id: 'MLB9', name: 'Air fryer 4L', permalink: '', pictures: [{ url: 'http://img/9' }], buy_box_winner: null });
     }
     return new Response('nope', { status: 404 });
   }) as typeof fetch;
@@ -67,7 +67,7 @@ describe('Mercado Livre: acesso renovado', () => {
     const [a, b] = await Promise.all([adapter.fetchListings(), adapter.fetchListings()]);
     // Só o produto de catálogo entra (ITEM e USER_PRODUCT são bloqueados), com o menor preço novo.
     expect(a).toHaveLength(1);
-    expect(a[0]).toMatchObject({ externalId: 'MLB9', title: 'Air fryer 4L', price: 24900, listPrice: 51900, imageUrl: 'https://img/9', url: 'https://ml/p/9' });
+    expect(a[0]).toMatchObject({ externalId: 'MLB9', title: 'Air fryer 4L', price: 24900, listPrice: 51900, imageUrl: 'https://img/9', url: 'https://www.mercadolivre.com.br/p/MLB9' });
     expect(b).toHaveLength(a.length);
     expect(ml.calls).toHaveLength(1);
   });

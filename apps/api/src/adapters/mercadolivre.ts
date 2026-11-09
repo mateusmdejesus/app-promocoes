@@ -127,7 +127,8 @@ export class MercadoLivreAdapter implements StoreAdapter {
           category: cat.category,
           price: toCents(best.price),
           listPrice: best.original_price ? toCents(best.original_price) : undefined,
-          url: this.link(p.permalink ?? `https://www.mercadolivre.com.br/p/${id}`),
+          // O permalink de produto de catálogo costuma vir vazio (""), então o "||" e não "??".
+          url: this.link(p.permalink || `https://www.mercadolivre.com.br/p/${id}`),
           imageUrl: https(p.pictures?.[0]?.url),
         });
       } catch (e) {
