@@ -24,7 +24,7 @@ export default function Interests() {
   return (
     <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <StepBar step={1} total={2} />
+        <StepBar step={1} total={3} />
         <View style={{ gap: 8 }}>
           <Text style={[type.display, styles.title]} accessibilityRole="header">
             O que você quer achar mais barato?
@@ -37,7 +37,7 @@ export default function Interests() {
             return (
               <PressableScale key={c} onPress={() => toggle(c)} accessibilityRole="checkbox" accessibilityState={{ checked: on }} style={[styles.option, on ? styles.on : styles.off]}>
                 <Text style={[styles.optionText, on && { color: color.paper }]}>{CATEGORY_NAMES[c]}</Text>
-                {on ? <Icon name="check" size={18} stroke={color.paper} width={2.5} /> : null}
+                <View style={[styles.mark, on ? styles.markOn : styles.markOff]}>{on ? <Icon name="check" size={14} stroke={color.ink} width={3} /> : null}</View>
               </PressableScale>
             );
           })}
@@ -47,7 +47,7 @@ export default function Interests() {
         <FlowFooter
           onBack={() => router.back()}
           nextDisabled={picked.size === 0}
-          onNext={() => router.push({ pathname: '/notifications', params: { categories: [...picked].join(',') } })}
+          onNext={() => router.push({ pathname: '/found', params: { categories: [...picked].join(',') } })}
         />
       </View>
     </SafeAreaView>
@@ -63,5 +63,8 @@ const styles = StyleSheet.create({
   on: { backgroundColor: color.ink },
   off: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.line },
   optionText: { fontFamily: font.medium, fontSize: 15, color: color.ink, flexShrink: 1 },
+  mark: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  markOn: { backgroundColor: color.paper },
+  markOff: { borderWidth: 1.5, borderColor: color.line },
   footer: { paddingHorizontal: gutter, paddingBottom: 12, paddingTop: 8 },
 });

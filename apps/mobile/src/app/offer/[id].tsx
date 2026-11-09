@@ -82,6 +82,26 @@ export default function OfferDetail() {
           {!offer.verified ? <Text style={styles.meta}>Desconto informado pela loja. Ainda estamos juntando o histórico deste produto.</Text> : null}
         </View>
 
+        <View style={styles.why}>
+          <Text style={[type.label, { color: color.ink, fontFamily: font.semibold }]} accessibilityRole="header">
+            Por que é uma boa oferta
+          </Text>
+          <View style={styles.tiles}>
+            <View style={styles.tile}>
+              <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>−{offer.discountPct}%</Text>
+              <Text style={styles.tileLabel}>{offer.verified ? 'abaixo do preço normal' : 'segundo a loja'}</Text>
+            </View>
+            <View style={styles.tile}>
+              <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{formatBRL(offer.referencePrice - offer.price)}</Text>
+              <Text style={styles.tileLabel}>de economia</Text>
+            </View>
+            <View style={styles.tile}>
+              <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{offer.lowestIn90d ? 'Menor' : formatBRL(offer.referencePrice)}</Text>
+              <Text style={styles.tileLabel}>{offer.lowestIn90d ? 'preço em 90 dias' : 'preço normal'}</Text>
+            </View>
+          </View>
+        </View>
+
         <View style={styles.card}>
           <View style={styles.cardHead}>
             <Text style={[type.label, { color: color.ink, fontFamily: font.semibold }]}>Histórico de preço</Text>
@@ -115,7 +135,12 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   price: { fontFamily: font.display, fontSize: 40, lineHeight: 46, letterSpacing: -1.2, color: color.ink },
   was: { fontFamily: font.body, fontSize: 16, color: color.inkMuted, textDecorationLine: 'line-through' },
-  card: { marginHorizontal: gutter, marginTop: 20, backgroundColor: color.surface, borderRadius: radius.card, padding: 16, gap: 10 },
+  why: { marginHorizontal: gutter, marginTop: 24, gap: 10 },
+  tiles: { flexDirection: 'row', gap: 8 },
+  tile: { flex: 1, backgroundColor: color.surface, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 12, gap: 2 },
+  tileValue: { fontFamily: font.display, fontSize: 20, lineHeight: 24, color: color.ink, letterSpacing: -0.4 },
+  tileLabel: { fontFamily: font.body, fontSize: 12, lineHeight: 16, color: color.inkMuted },
+  card: { marginHorizontal: gutter, marginTop: 12, backgroundColor: color.surface, borderRadius: radius.card, padding: 16, gap: 10 },
   cardHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   cta: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: color.paper, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: color.line, paddingHorizontal: gutter, paddingTop: 12, gap: 8 },
   disclosure: { ...type.caption, fontSize: 12, lineHeight: 16, color: color.inkMuted, textAlign: 'center' },

@@ -3,12 +3,15 @@ import * as Haptics from 'expo-haptics';
 import { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Chip, TextButton } from '../../components/Controls';
+import { Chip, ListRow } from '../../components/Controls';
 import { ErrorState, SkeletonList } from '../../components/States';
 import { registerForPush } from '../../notifications';
 import { useSession } from '../../session';
 import { color, gutter, type } from '../../theme';
 import { useAsync } from '../../useAsync';
+
+/** Páginas legais. Trocar pelo domínio definitivo antes de publicar. */
+const LEGAL_URL = 'https://keropromo.app';
 
 export default function Profile() {
   const { api } = useSession();
@@ -69,13 +72,11 @@ export default function Profile() {
           )}
         </View>
 
-        <View style={{ gap: 4 }}>
-          <Text style={[type.title, { color: color.ink }]}>Notificações</Text>
-          <Text style={[type.body, { color: color.inkMuted, fontSize: 15, lineHeight: 22 }]}>No máximo 5 por dia. Nada entre 23h e 8h, exceto alertas que você criou.</Text>
-          <View style={{ alignItems: 'flex-start' }}>
-            <TextButton label="Ativar ou ajustar notificações" onPress={enablePush} />
-          </View>
-          {saved ? <Text style={[type.caption, { color: color.ink }]}>{saved}</Text> : null}
+        <View>
+          <Text style={[type.title, { color: color.ink, marginBottom: 4 }]}>Ajustes</Text>
+          <ListRow title="Notificações" subtitle={saved ?? 'No máximo 5 por dia, nada entre 23h e 8h'} onPress={enablePush} />
+          <ListRow title="Termos de Uso" onPress={() => Linking.openURL(LEGAL_URL + '/termos')} />
+          <ListRow title="Política de Privacidade" onPress={() => Linking.openURL(LEGAL_URL + '/privacidade')} last />
         </View>
 
         <Text style={[type.caption, { color: color.inkMuted }]}>

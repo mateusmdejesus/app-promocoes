@@ -12,6 +12,8 @@ interface Session {
   api: Api;
   /** Cria a conta anônima do aparelho, se ainda não existir. */
   ensureAccount: () => Promise<void>;
+  /** Cria a conta (se preciso) e salva os interesses, sem concluir o onboarding. */
+  saveInterests: (categories: Category[]) => Promise<void>;
   /** Conclui o onboarding salvando os interesses escolhidos. */
   finishOnboarding: (categories: Category[]) => Promise<void>;
 }
@@ -39,17 +41,24 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     secret.current = u.secret;
   }, [api]);
 
-  const finishOnboarding = useCallback(
+  const saveInterests = useCallback(
     async (categories: Category[]) => {
       await ensureAccount();
       await api.updateMe({ categories });
-      await storage.set(ONBOARDED_KEY, '1');
-      setOnboarded(true);
     },
     [api, ensureAccount],
   );
 
-  const value = useMemo(() => ({ ready, onboarded, api, ensureAccount, finishOnboarding }), [ready, onboarded, api, ensureAccount, finishOnboarding]);
+  const finishOnboarding = useCallback(
+    async (categories: Category[]) => {
+      await saveInterests(categories);
+      await storage.set(ONBOARDED_KEY, '1');
+      setOnboarded(true);
+    },
+    [saveInterests],
+  );
+
+  const value = useMemo(() => ({ ready, onboarded, api, ensureAccount, saveInterests, finishOnboarding }), [ready, onboarded, api, ensureAccount, saveInterests, finishOnboarding]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

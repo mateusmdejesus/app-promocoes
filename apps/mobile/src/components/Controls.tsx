@@ -4,25 +4,35 @@ import { color, font, radius, type } from '../theme';
 import { Icon, type IconName } from './Icon';
 import { PressableScale } from './PressableScale';
 
-/** Botão principal, um por tela. Tinta sobre papel. */
-export function PrimaryButton({ label, onPress, disabled, loading, icon, style }: { label: string; onPress: () => void; disabled?: boolean; loading?: boolean; icon?: IconName; style?: StyleProp<ViewStyle> }) {
+/** Botão principal, um por tela. Tinta sobre papel; `inverse` = papel sobre tinta. */
+export function PrimaryButton({ label, onPress, disabled, loading, icon, style, inverse }: { label: string; onPress: () => void; disabled?: boolean; loading?: boolean; icon?: IconName; style?: StyleProp<ViewStyle>; inverse?: boolean }) {
   const off = disabled || loading;
+  const fg = disabled ? color.inkDisabled : inverse ? color.ink : color.paper;
   return (
     <PressableScale
       onPress={onPress}
       disabled={off}
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
-      style={[styles.primary, off && !loading && styles.primaryOff, style]}
+      style={[styles.primary, inverse && { backgroundColor: color.paper }, off && !loading && styles.primaryOff, style]}
     >
       {loading ? (
-        <ActivityIndicator color={color.paper} />
+        <ActivityIndicator color={fg} />
       ) : (
         <>
-          <Text style={[type.button, { color: disabled ? color.inkDisabled : color.paper }]}>{label}</Text>
-          {icon ? <Icon name={icon} size={18} stroke={disabled ? color.inkDisabled : color.paper} width={2} /> : null}
+          <Text style={[type.button, { color: fg }]}>{label}</Text>
+          {icon ? <Icon name={icon} size={18} stroke={fg} width={2} /> : null}
         </>
       )}
+    </PressableScale>
+  );
+}
+
+/** Ação secundária: pílula clara preenchida (padrão "Maybe later" do Headspace). */
+export function SecondaryButton({ label, onPress, disabled }: { label: string; onPress: () => void; disabled?: boolean }) {
+  return (
+    <PressableScale onPress={onPress} disabled={disabled} accessibilityRole="button" style={styles.secondary}>
+      <Text style={[type.button, { color: color.ink }]}>{label}</Text>
     </PressableScale>
   );
 }
@@ -36,10 +46,10 @@ export function TextButton({ label, onPress }: { label: string; onPress: () => v
   );
 }
 
-export function CircleButton({ icon, label, onPress, background = color.stone }: { icon: IconName; label: string; onPress: () => void; background?: string }) {
+export function CircleButton({ icon, label, onPress, background = color.stone, iconColor = color.ink }: { icon: IconName; label: string; onPress: () => void; background?: string; iconColor?: string }) {
   return (
     <PressableScale onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={[styles.circle, { backgroundColor: background }]}>
-      <Icon name={icon} />
+      <Icon name={icon} stroke={iconColor} />
     </PressableScale>
   );
 }
@@ -73,6 +83,21 @@ export function FlowFooter({ onBack, onNext, nextLabel = 'Próximo', nextDisable
   );
 }
 
+/** Linha de lista com divisória recuada e seta (padrão de lista do Uber Eats). */
+export function ListRow({ title, subtitle, onPress, last }: { title: string; subtitle?: string; onPress: () => void; last?: boolean }) {
+  return (
+    <PressableScale onPress={onPress} accessibilityRole="button" accessibilityHint={subtitle} style={styles.listRow}>
+      <View style={[styles.listRowInner, !last && styles.listRowDivider]}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[type.bodyStrong, { color: color.ink }]}>{title}</Text>
+          {subtitle ? <Text style={[type.caption, { color: color.inkMuted }]}>{subtitle}</Text> : null}
+        </View>
+        <Icon name="chevron" size={18} stroke={color.inkMuted} width={2} />
+      </View>
+    </PressableScale>
+  );
+}
+
 export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (
     <View style={styles.section}>
@@ -87,6 +112,7 @@ export function SectionHeader({ title, action }: { title: string; action?: React
 const styles = StyleSheet.create({
   primary: { height: 56, borderRadius: radius.button, backgroundColor: color.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 20 },
   primaryOff: { backgroundColor: color.stone },
+  secondary: { height: 56, borderRadius: radius.button, backgroundColor: color.stone, alignItems: 'center', justifyContent: 'center' },
   textButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   circle: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   chip: { height: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center' },
@@ -98,5 +124,8 @@ const styles = StyleSheet.create({
   step: { flex: 1, height: 4, borderRadius: 2 },
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   nextPill: { height: 52, borderRadius: 26 },
+  listRow: { minHeight: 64 },
+  listRowInner: { flex: 1, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  listRowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: color.line },
   section: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
 });

@@ -6,16 +6,16 @@ import { color, font, radius } from '../theme';
  * ≥ 25%: contorno. ≥ 40%: fundo laranja com "quente".
  * Texto sobre o laranja é sempre tinta (branco não passa contraste).
  */
-export function DiscountBadge({ pct, tier, size = 'm' }: { pct: number; tier: Tier; size?: 's' | 'm' }) {
+export function DiscountBadge({ pct, tier, size = 'm', inverse = false }: { pct: number; tier: Tier; size?: 's' | 'm'; inverse?: boolean }) {
   if (tier === 'none') return null;
   const hot = tier === 'hot';
   return (
     <View
-      style={[styles.base, size === 's' && styles.small, hot ? styles.hot : styles.promo]}
+      style={[styles.base, size === 's' && styles.small, hot ? styles.hot : styles.promo, !hot && inverse && { borderColor: color.paper }]}
       accessible
       accessibilityLabel={`${pct}% de desconto${hot ? ', oferta quente' : ''}`}
     >
-      <Text style={[styles.text, size === 's' && styles.textSmall]}>
+      <Text style={[styles.text, size === 's' && styles.textSmall, !hot && inverse && { color: color.paper }]}>
         −{pct}%{hot ? ' quente' : ''}
       </Text>
     </View>

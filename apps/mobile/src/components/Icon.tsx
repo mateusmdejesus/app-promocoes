@@ -1,7 +1,7 @@
 import Svg, { Circle, Path } from 'react-native-svg';
 import { color } from '../theme';
 
-export type IconName = 'back' | 'next' | 'share' | 'heart' | 'external' | 'plus' | 'check' | 'search' | 'bell' | 'close';
+export type IconName = 'back' | 'next' | 'share' | 'heart' | 'external' | 'plus' | 'check' | 'search' | 'bell' | 'close' | 'chevron';
 
 const PATHS: Record<IconName, string[]> = {
   back: ['M19 12H5', 'M11 6l-6 6 6 6'],
@@ -14,6 +14,7 @@ const PATHS: Record<IconName, string[]> = {
   search: ['m20 20-3.5-3.5'],
   bell: ['M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9', 'M10.3 21a1.9 1.9 0 0 0 3.4 0'],
   close: ['M6 6l12 12', 'M18 6 6 18'],
+  chevron: ['m9 6 6 6-6 6'],
 };
 
 /** Ícones de traço 1,8 pt, cantos arredondados (docs/design/IDENTIDADE.md). */
