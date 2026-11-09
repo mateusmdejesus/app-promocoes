@@ -67,7 +67,7 @@ Testes: `npm test` na raiz.
 | Loja | Situação |
 |---|---|
 | Loja de exemplo (`demo`) | Funciona. Gera preços realistas, inclusive "de" inflado, para desenvolver sem depender de ninguém. |
-| Mercado Livre | Coletor pela API oficial, com renovação automática do acesso. Precisa de `ML_CLIENT_ID`, `ML_CLIENT_SECRET` e `ML_REFRESH_TOKEN`. **Ainda não testado** com a API real. |
+| Mercado Livre | Coletor pela API oficial, com renovação automática do acesso. Lê os mais vendidos por categoria (`/highlights` + `/items`) e a busca, se liberada (para aplicações novas ela responde 403). Precisa de `ML_CLIENT_ID`, `ML_CLIENT_SECRET` e `ML_REFRESH_TOKEN`. |
 | Amazon | A fazer, via Keepa (serviço pago de histórico de preços da Amazon). |
 | KaBuM! e outras | A fazer, via feed de produtos da Awin (o cadastro de parceiro é só a chave de acesso aos dados). |
 

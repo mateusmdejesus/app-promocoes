@@ -15,8 +15,16 @@ function fakeMl() {
       n++;
       return Response.json({ access_token: `acc-${n}`, refresh_token: `ref-${n}`, expires_in: 21600 });
     }
-    if (url.includes('/sites/MLB/search')) {
-      return Response.json({ results: [{ id: 'MLB1', title: 'Air fryer 4L', price: 249, original_price: 519, permalink: 'https://ml/1' }] });
+    if (url.includes('/sites/MLB/search')) return new Response('forbidden', { status: 403 });
+    if (url.includes('/highlights/MLB/category/MLB1000')) {
+      return Response.json({ content: [{ id: 'MLB1', type: 'ITEM' }, { id: 'MLB9', type: 'PRODUCT' }] });
+    }
+    if (url.includes('/highlights/')) return Response.json({ content: [] });
+    if (url.includes('/items?ids=MLB1')) {
+      return Response.json([{ code: 200, body: { id: 'MLB1', title: 'Air fryer 4L', price: 249, original_price: 519, permalink: 'https://ml/1', thumbnail: 'http://img/1' } }]);
+    }
+    if (url.includes('/products/MLB9')) {
+      return Response.json({ id: 'MLB9', name: 'Fone X', permalink: 'https://ml/p/9', pictures: [{ url: 'https://img/9' }], buy_box_winner: { item_id: 'MLB10', price: 99.9, original_price: null } });
     }
     return new Response('nope', { status: 404 });
   }) as typeof fetch;
@@ -53,6 +61,8 @@ describe('Mercado Livre: acesso renovado', () => {
     const adapter = new MercadoLivreAdapter({ auth, fetchImpl: ml.fetchImpl });
     const [a, b] = await Promise.all([adapter.fetchListings(), adapter.fetchListings()]);
     expect(a[0]!.price).toBe(24900);
+    expect(a[0]!.imageUrl).toBe('https://img/1');
+    expect(a.find((l) => l.externalId === 'MLB9')!.price).toBe(9990);
     expect(b).toHaveLength(a.length);
     expect(ml.calls).toHaveLength(1);
   });
