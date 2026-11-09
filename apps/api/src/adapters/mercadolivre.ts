@@ -24,7 +24,6 @@ const HIGHLIGHTS: Array<{ id: string; category: Category }> = [
   { id: 'MLB1384', category: 'bebe' },
   { id: 'MLB1071', category: 'pet' },
   { id: 'MLB1403', category: 'mercado' }, // Alimentos e bebidas
-  { id: 'MLB3025', category: 'livros' },
 ];
 
 const SEARCHES: Array<{ q: string; category: Category }> = [
@@ -125,6 +124,11 @@ export class MercadoLivreAdapter implements StoreAdapter {
       } catch {
         // produto sem vendedor ativo: ignora
       }
+    }
+    if (out.length === 0) {
+      // Diagnóstico: mostra o que a API devolveu, para não ficar um "0 produtos" sem explicação.
+      const types = [...new Set(content.map((c) => c.type))].join(',') || 'nenhum';
+      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; resposta: ${JSON.stringify(h).slice(0, 160)})`);
     }
     return out;
   }
