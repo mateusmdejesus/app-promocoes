@@ -1,0 +1,12 @@
+# O que a Vercel não precisa para montar o site (apps/web).
+Dockerfile
+railway.json
+.dockerignore
+.agents
+.claude
+docs
+apps/api
+apps/mobile/src
+apps/mobile/assets
+apps/mobile/app.json
+apps/mobile/eas.json
