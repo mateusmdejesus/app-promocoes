@@ -8,3 +8,6 @@ dist/
 !.env.example
 ios/
 android/
+.next/
+next-env.d.ts
+*.tsbuildinfo

@@ -1,0 +1,7 @@
+.banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-radius: var(--radius-card); background: var(--ink); color: #d9d2c6; text-decoration: none; }
+.banner strong { color: var(--paper); }
+.grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.skeleton { aspect-ratio: 4 / 5; background: var(--stone); }
+.listHead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 16px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.rows { display: grid; gap: 12px 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }

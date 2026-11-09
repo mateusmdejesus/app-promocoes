@@ -1,0 +1,103 @@
+/* keropromo — identidade A · Etiqueta (docs/design/IDENTIDADE.md) */
+:root {
+  --paper: #f5f2ec;
+  --surface: #ffffff;
+  --stone: #e4ded3;
+  --line: #d9d2c6;
+  --ink: #16130f;
+  --ink-2: #2a2520;
+  --ink-muted: #6b645b;
+  --ink-soft: #b9b2a6;
+  --ink-faint: #8a8278;
+  --signal: #ff5a1f;
+
+  --font-display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', system-ui, sans-serif;
+  --font-body: 'Inter Variable', Inter, system-ui, sans-serif;
+
+  --radius-field: 12px;
+  --radius-card: 18px;
+  --radius-big: 24px;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --page: 1200px;
+  --gutter: 20px;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+img { max-width: 100%; display: block; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 6px; }
+.dark :focus-visible { outline-color: var(--paper); }
+
+.container { width: 100%; max-width: calc(var(--page) + 2 * var(--gutter)); margin: 0 auto; padding: 0 var(--gutter); }
+@media (min-width: 900px) { :root { --gutter: 40px; } }
+
+.display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.035em; line-height: 1; margin: 0; }
+.h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.025em; line-height: 1.1; margin: 0; font-size: clamp(28px, 4vw, 44px); }
+.h3 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; margin: 0; font-size: 22px; line-height: 1.2; }
+.muted { color: var(--ink-muted); }
+.price { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; }
+.strike { text-decoration: line-through; color: var(--ink-muted); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Botões: um principal por bloco. Pressão de 0,97 no toque. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 52px; padding: 0 24px; border-radius: 14px; border: 0;
+  font-weight: 600; font-size: 16px; text-decoration: none; white-space: nowrap;
+  transition: transform 120ms var(--ease-out), background-color 150ms var(--ease-out);
+}
+.btn:active { transform: scale(0.97); }
+.btn[disabled] { opacity: 0.55; cursor: not-allowed; transform: none; }
+.btn-primary { background: var(--ink); color: var(--paper); }
+.btn-primary:hover { background: #2e2923; }
+.btn-light { background: var(--paper); color: var(--ink); }
+.btn-light:hover { background: #fff; }
+.btn-soft { background: var(--stone); color: var(--ink); }
+.btn-soft:hover { background: #dcd5c8; }
+.btn-signal { background: var(--signal); color: var(--ink); }
+.btn-signal:hover { background: #ff6d37; }
+.btn-lg { height: 58px; font-size: 17px; padding: 0 28px; border-radius: 16px; }
+.btn-block { width: 100%; }
+.link { font-weight: 500; text-underline-offset: 3px; }
+
+/* Selos de desconto: ≥25% contorno, ≥40% laranja "quente". Texto sobre laranja é sempre tinta. */
+.badge { display: inline-flex; align-items: center; font-family: var(--font-display); font-weight: 700; font-size: 14px; line-height: 1; padding: 6px 9px; border-radius: 8px; white-space: nowrap; }
+.badge-promo { border: 1.5px solid var(--ink); }
+.badge-hot { background: var(--signal); color: var(--ink); }
+.badge-on-dark.badge-promo { border-color: var(--paper); color: var(--paper); }
+
+.pill-lock { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: var(--stone); font-size: 13px; font-weight: 600; }
+
+.card { background: var(--surface); border-radius: var(--radius-card); }
+.chip { height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line); background: transparent; font-size: 14px; display: inline-flex; align-items: center; white-space: nowrap; }
+.chip[aria-pressed='true'] { background: var(--ink); color: var(--paper); border-color: var(--ink); font-weight: 600; }
+
+.field { display: flex; flex-direction: column; gap: 8px; }
+.field label { font-size: 15px; font-weight: 500; }
+.input {
+  height: 52px; border-radius: var(--radius-field); border: 2px solid transparent; background: var(--stone);
+  padding: 0 14px; font: inherit; font-size: 17px; color: var(--ink); width: 100%;
+}
+.input:focus { outline: none; background: #fff; border-color: var(--ink); }
+.input[aria-invalid='true'] { border-color: #b3261e; background: #fff; }
+.error { color: #b3261e; font-size: 14px; min-height: 20px; }
+
+.tag-shape { position: relative; display: flex; align-items: center; }
+.tag-shape svg { position: absolute; inset: 0; }
+.tag-shape span { position: relative; font-family: var(--font-display); font-weight: 800; letter-spacing: -0.04em; color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

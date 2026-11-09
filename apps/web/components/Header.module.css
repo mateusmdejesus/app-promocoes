@@ -1,0 +1,10 @@
+.header { background: var(--ink); color: var(--paper); position: sticky; top: 0; z-index: 20; border-bottom: 1px solid #24201b; }
+.row { height: 68px; display: flex; align-items: center; gap: 32px; }
+.logo { text-decoration: none; display: inline-flex; }
+.nav { display: none; gap: 28px; font-size: 15px; }
+.nav a { color: var(--ink-soft); text-decoration: none; }
+.nav a:hover { color: var(--paper); }
+.right { margin-left: auto; display: flex; align-items: center; gap: 20px; }
+.textLink { color: var(--paper); text-decoration: none; font-size: 15px; font-weight: 500; }
+.proBadge { font-size: 12px; font-weight: 700; padding: 5px 9px; border-radius: 999px; background: var(--signal); color: var(--ink); }
+@media (min-width: 860px) { .nav { display: flex; } }
