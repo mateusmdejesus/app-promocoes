@@ -105,6 +105,7 @@ export const api = {
   startEmail: (email: string) => call<void>('POST', '/v1/auth/email/start', { email }),
   verifyEmail: (email: string, code: string) => call<{ userId: string; token: string; isNew: boolean }>('POST', '/v1/auth/email/verify', { email, code }),
   logout: () => call<void>('POST', '/v1/auth/logout'),
+  deleteAccount: () => call<void>('DELETE', '/v1/me'),
   createPix: (period: 'monthly' | 'yearly') => call<{ charge: PixCharge }>('POST', '/v1/billing/pix', { period }),
   pix: (id: string) => call<{ charge: PixCharge; plan: Plan }>('GET', `/v1/billing/pix/${id}`),
   devPayPix: (id: string) => call<{ plan: Plan }>('POST', `/v1/dev/pix/${id}/pay`),

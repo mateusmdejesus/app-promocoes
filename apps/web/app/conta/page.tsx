@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from '../../components/Session';
+import { api } from '../../lib/api';
 
 export default function Conta() {
   const { me, ready, signOut } = useSession();
@@ -44,6 +45,23 @@ export default function Conta() {
       </div>
       <button className="btn btn-soft" style={{ alignSelf: 'flex-start' }} onClick={async () => { await signOut(); router.push('/'); }}>
         Sair
+      </button>
+      <button
+        className="link"
+        style={{ alignSelf: 'flex-start', background: 'none', border: 0, padding: 0, color: 'var(--ink-muted)', textDecoration: 'underline', cursor: 'pointer', marginTop: 24 }}
+        onClick={async () => {
+          if (!confirm('Excluir sua conta? Isso apaga seu e-mail, preferências e histórico no keropromo e não dá para desfazer. Um Pro ainda válido também é perdido.')) return;
+          try {
+            await api.deleteAccount();
+          } catch {
+            alert('Não deu para excluir agora. Tente de novo em instantes.');
+            return;
+          }
+          await signOut();
+          router.push('/');
+        }}
+      >
+        Excluir conta
       </button>
     </div>
   );
