@@ -1,7 +1,10 @@
 import type { BillingPeriod, Category, Plan, StoreId, Tier } from '@keropromo/core';
 
-/** Endereço da API. Em desenvolvimento, use o IP da sua máquina na rede local. */
-export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3333';
+/**
+ * Endereço da API. Padrão: o servidor publicado no Railway.
+ * Para usar uma API local, rode com EXPO_PUBLIC_API_URL=http://SEU_IP:3333.
+ */
+export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://app-promocoes-production.up.railway.app';
 
 export interface Offer {
   id: string;

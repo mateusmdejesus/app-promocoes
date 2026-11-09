@@ -73,6 +73,16 @@ Testes: `npm test` na raiz.
 
 Lojas ativas são escolhidas por `STORES` (veja `apps/api/.env.example`).
 
+## Servidor publicado
+
+Railway (projeto `kind-tenderness`, serviço `app-promocoes`, branch `claude/promo-monitoring-app-i9oen7`):
+https://app-promocoes-production.up.railway.app — o app usa esse endereço por padrão.
+
+- Volume montado em `/data` (banco SQLite).
+- Variáveis: `STORES=demo`, `APPLE_BUNDLE_ID=app.keropromo` e **`PORT=3333`** (o Railway injeta a
+  própria porta; sem fixar 3333 o domínio, que aponta para 3333, responde 502).
+- Falta: `REVENUECAT_WEBHOOK_AUTH` (e o mesmo valor no webhook do RevenueCat) e `RESEND_API_KEY`.
+
 ## Testando o Pro sem loja
 
 API com `ALLOW_DEV_PURCHASES=1` e app com `EXPO_PUBLIC_DEV_PURCHASES=1`: o botão "Assinar"
