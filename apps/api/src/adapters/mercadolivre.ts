@@ -95,40 +95,50 @@ export class MercadoLivreAdapter implements StoreAdapter {
     const h = await this.get<{ content?: Array<{ id: string; type: string }> }>(`/highlights/MLB/category/${cat.id}`);
     const content = h.content ?? [];
     const out: ListingSnapshot[] = [];
+    const ids = [...new Set(content.map((c) => c.id))];
 
-    const itemIds = content.filter((c) => c.type === 'ITEM').map((c) => c.id);
-    for (let i = 0; i < itemIds.length; i += 20) {
-      const ids = itemIds.slice(i, i + 20).join(',');
+    // 1) Tenta cada ID como anúncio (/items). Os destaques trazem PRODUCT e USER_PRODUCT,
+    //    mas alguns IDs também são anúncios; o que não for anúncio cai no passo 2.
+    const asItem = new Set<string>();
+    for (let i = 0; i < ids.length; i += 20) {
+      const batch = ids.slice(i, i + 20);
       const rows = await this.get<Array<{ code: number; body: MlItem }>>(
-        `/items?ids=${ids}&attributes=id,title,price,original_price,permalink,thumbnail,status`,
+        `/items?ids=${batch.join(',')}&attributes=id,title,price,original_price,permalink,thumbnail,status`,
       );
-      for (const r of rows) {
-        if (r.code === 200 && r.body && r.body.status !== 'paused' && r.body.price) out.push(this.fromItem(r.body, cat.category));
-      }
+      rows.forEach((r, j) => {
+        if (r.code === 200 && r.body && r.body.status !== 'paused' && r.body.price) {
+          asItem.add(batch[j]!);
+          out.push(this.fromItem(r.body, cat.category));
+        }
+      });
     }
 
-    for (const c of content.filter((c) => c.type === 'PRODUCT')) {
+    // 2) O resto é produto de catálogo: pega o anúncio vencedor (buy_box_winner).
+    let productErrors = 0;
+    let productSample = '';
+    for (const id of ids.filter((x) => !asItem.has(x))) {
       try {
-        const p = await this.get<MlProduct>(`/products/${c.id}`);
+        const p = await this.get<MlProduct>(`/products/${id}`);
         const w = p.buy_box_winner;
         if (!w?.price) continue;
         out.push({
-          externalId: c.id,
+          externalId: id,
           title: p.name,
           category: cat.category,
           price: toCents(w.price),
           listPrice: w.original_price ? toCents(w.original_price) : undefined,
-          url: this.link(p.permalink ?? `https://www.mercadolivre.com.br/p/${c.id}`),
+          url: this.link(p.permalink ?? `https://www.mercadolivre.com.br/p/${id}`),
           imageUrl: https(p.pictures?.[0]?.url),
         });
-      } catch {
-        // produto sem vendedor ativo: ignora
+      } catch (e) {
+        productErrors++;
+        productSample ||= (e as Error).message;
       }
     }
+
     if (out.length === 0) {
-      // Diagnóstico: mostra o que a API devolveu, para não ficar um "0 produtos" sem explicação.
       const types = [...new Set(content.map((c) => c.type))].join(',') || 'nenhum';
-      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; resposta: ${JSON.stringify(h).slice(0, 160)})`);
+      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; falhas em /products: ${productErrors}${productSample ? ` ex.: ${productSample}` : ''})`);
     }
     return out;
   }
