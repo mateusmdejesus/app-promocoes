@@ -46,7 +46,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const done = (await storage.get(ONBOARDED_KEY)) === '1' && !!token.current;
       if (done) {
         const m = await refreshMe().catch(() => null);
-        if (m) await billing.identify(m.userId);
+        if (m) await billing.identify(m.userId).catch(() => undefined);
       }
       setOnboarded(done);
       setReady(true);
@@ -78,7 +78,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       await setToken(t);
       const m = (await refreshMe())!;
       // As compras na loja ficam ligadas a este id: o webhook usa ele para liberar o Pro.
-      await billing.identify(m.userId);
+      // Falha da loja de assinaturas nunca pode impedir o login.
+      await billing.identify(m.userId).catch(() => undefined);
       return m;
     },
     [refreshMe],

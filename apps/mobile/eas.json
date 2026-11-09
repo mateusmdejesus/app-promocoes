@@ -10,11 +10,21 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_REVENUECAT_TEST_KEY": "test_aeBWApXCLCXrgOnCCfEWgQCpuEF"
+        "EXPO_PUBLIC_DEV_PURCHASES": "1"
       }
     },
     "production": {
       "autoIncrement": true
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_REVENUECAT_TEST_KEY": "test_aeBWApXCLCXrgOnCCfEWgQCpuEF"
+      }
     }
   }
 }
