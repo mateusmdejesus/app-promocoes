@@ -11,6 +11,8 @@ import { buildServer } from './server';
 const db = openDb(config.databasePath);
 const repo = new Repo(db, { proEmails: config.proEmails });
 const adapters = buildAdapters(db);
+const pruned = repo.pruneOffersExcept(config.stores);
+if (pruned) console.log(`[lojas] ${pruned} ofertas de lojas desligadas foram tiradas do ar.`);
 const sender = new ExpoPushSender();
 
 let running = false;

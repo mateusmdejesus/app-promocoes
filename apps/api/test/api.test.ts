@@ -172,6 +172,18 @@ describe('API', () => {
   });
 });
 
+describe('lojas', () => {
+  it('ofertas de uma loja que saiu de STORES saem do ar', async () => {
+    await stableHistory();
+    store.set('af', 'Air Fryer 4L Digital', 'casa', 24900, 51900);
+    await runMonitor(repo, [store], sender, new Date(T0 + 30 * DAY));
+    expect(repo.getOffer('mercadolivre:af')).toBeTruthy();
+    expect(repo.pruneOffersExcept(['mercadolivre'])).toBe(0);
+    expect(repo.pruneOffersExcept(['amazon'])).toBeGreaterThan(0);
+    expect(repo.getOffer('mercadolivre:af')).toBeFalsy();
+  });
+});
+
 describe('contas', () => {
   it('login por e-mail com código: conta anônima vira a conta da pessoa e mantém os interesses', async () => {
     const app = serverAt();

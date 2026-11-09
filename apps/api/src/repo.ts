@@ -156,6 +156,13 @@ export class Repo {
     return r ? String(r.id) : undefined;
   }
 
+  /** Tira do ar as ofertas de lojas que saíram de STORES (o histórico de preço fica guardado). */
+  pruneOffersExcept(stores: string[]): number {
+    if (stores.length === 0) return 0;
+    const marks = stores.map(() => '?').join(',');
+    return n(this.db.prepare(`DELETE FROM offers WHERE product_id IN (SELECT id FROM products WHERE store NOT IN (${marks}))`).run(...stores).changes);
+  }
+
   account(userId: string): { email?: string; hasApple: boolean; proUntil?: Date } | undefined {
     const r = this.db.prepare('SELECT email, apple_sub, pro_until FROM users WHERE id = ?').get(userId) as Row | undefined;
     if (!r) return undefined;

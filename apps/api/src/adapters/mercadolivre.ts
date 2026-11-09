@@ -6,8 +6,8 @@ import type { ListingSnapshot, StoreAdapter } from './types';
  * Usa o acesso renovado automaticamente pelo MercadoLivreAuth (ver mercadolivreAuth.ts).
  *
  * Duas fontes, porque a busca (/sites/MLB/search) responde 403 para aplicações novas:
- * 1. Mais vendidos por categoria (/highlights) + preço de cada anúncio (/items?ids=) ou
- *    produto de catálogo (/products/{id}).
+ * 1. Mais vendidos por categoria (/highlights) + preço pelos anúncios de cada produto de
+ *    catálogo (/products/{id}/items). Ver fromHighlights.
  * 2. Busca por termo, se estiver liberada.
  * Uma fonte com erro não derruba as outras; só dá erro se nada funcionar.
  */
@@ -24,6 +24,13 @@ const HIGHLIGHTS: Array<{ id: string; category: Category }> = [
   { id: 'MLB1384', category: 'bebe' },
   { id: 'MLB1071', category: 'pet' },
   { id: 'MLB1403', category: 'mercado' }, // Alimentos e bebidas
+  { id: 'MLB1039', category: 'eletronicos' }, // Câmeras e acessórios
+  { id: 'MLB263532', category: 'casa' }, // Ferramentas
+  { id: 'MLB1500', category: 'casa' }, // Construção
+  { id: 'MLB3937', category: 'moda' }, // Joias e relógios
+  { id: 'MLB264586', category: 'beleza' }, // Saúde
+  { id: 'MLB1132', category: 'bebe' }, // Brinquedos e hobbies
+  { id: 'MLB1196', category: 'livros' }, // Livros, revistas e comics
 ];
 
 const SEARCHES: Array<{ q: string; category: Category }> = [
@@ -52,7 +59,7 @@ interface MlProductItem {
   condition?: string;
 }
 
-const MAX_PRODUCTS_PER_CATEGORY = 12;
+const MAX_PRODUCTS_PER_CATEGORY = 20;
 
 interface MlProduct {
   id: string;
@@ -77,10 +84,17 @@ export class MercadoLivreAdapter implements StoreAdapter {
   store = 'mercadolivre' as const;
   constructor(private opts: MercadoLivreOptions) {}
 
+  /** Nome, foto e link mudam pouco: guardados para não pedir de novo a cada varredura. */
+  private productInfo = new Map<string, { name: string; url: string; imageUrl?: string }>();
+  /** O Mercado Livre pediu para ir mais devagar (429): para a varredura atual. */
+  private rateLimited = false;
+
   private async get<T>(path: string): Promise<T> {
+    if (this.rateLimited) throw new Error(`429 em ${path.split('?')[0]} (aguardando a próxima varredura)`);
     const f = this.opts.fetchImpl ?? fetch;
     const token = await this.opts.auth.accessToken();
     const res = await f(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (res.status === 429) this.rateLimited = true;
     if (!res.ok) throw new Error(`${res.status} em ${path.split('?')[0]}`);
     return (await res.json()) as T;
   }
@@ -120,16 +134,21 @@ export class MercadoLivreAdapter implements StoreAdapter {
         const active = (offers.results ?? []).filter((o) => o.price > 0 && (o.condition ?? 'new') === 'new');
         if (active.length === 0) continue;
         const best = active.reduce((m, o) => (o.price < m.price ? o : m));
-        const p = await this.get<MlProduct>(`/products/${id}`);
+        let info = this.productInfo.get(id);
+        if (!info) {
+          const p = await this.get<MlProduct>(`/products/${id}`);
+          // O permalink de produto de catálogo costuma vir vazio (""), então o "||" e não "??".
+          info = { name: p.name, url: this.link(p.permalink || `https://www.mercadolivre.com.br/p/${id}`), imageUrl: https(p.pictures?.[0]?.url) };
+          this.productInfo.set(id, info);
+        }
         out.push({
           externalId: id,
-          title: p.name,
+          title: info.name,
           category: cat.category,
           price: toCents(best.price),
           listPrice: best.original_price ? toCents(best.original_price) : undefined,
-          // O permalink de produto de catálogo costuma vir vazio (""), então o "||" e não "??".
-          url: this.link(p.permalink || `https://www.mercadolivre.com.br/p/${id}`),
-          imageUrl: https(p.pictures?.[0]?.url),
+          url: info.url,
+          imageUrl: info.imageUrl,
         });
       } catch (e) {
         failures++;
@@ -153,8 +172,13 @@ export class MercadoLivreAdapter implements StoreAdapter {
     const byId = new Map<string, ListingSnapshot>();
     const errors: string[] = [];
     let searchBlocked = false;
+    this.rateLimited = false;
 
     for (const cat of HIGHLIGHTS) {
+      if (this.rateLimited) {
+        errors.push('limite de chamadas do Mercado Livre (429): resto fica para a próxima varredura');
+        break;
+      }
       try {
         for (const l of await this.fromHighlights(cat)) byId.set(l.externalId, l);
       } catch (e) {
