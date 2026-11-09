@@ -1,6 +1,10 @@
 "use client";
 
-import { CATEGORY_NAMES, type Category } from "@keropromo/core";
+import {
+  CATEGORY_NAMES,
+  HOME_TAB_CATEGORIES,
+  type Category,
+} from "@keropromo/core";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { OfferCard, OfferRow, OfferTile } from "../../components/OfferCard";
@@ -15,17 +19,44 @@ export default function Ofertas() {
   const [all, setAll] = useState<Offer[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [cat, setCat] = useState<Category | "all">("all");
+  // Abas: "Todas" ou "Casa e eletro" (TV, eletrodomésticos e cozinha). /ofertas?aba=casa abre direto nela.
+  const [tab, setTab] = useState<"all" | "casa" | null>(null);
 
   useEffect(() => {
-    if (!ready) return;
+    setTab(
+      new URLSearchParams(location.search).get("aba") === "casa"
+        ? "casa"
+        : "all",
+    );
+  }, []);
+
+  const chooseTab = (t: "all" | "casa") => {
+    setTab(t);
+    setCat("all");
+    history.replaceState(
+      null,
+      "",
+      t === "casa" ? "/ofertas?aba=casa" : "/ofertas",
+    );
+  };
+
+  useEffect(() => {
+    if (!ready || tab === null) return;
     setError(null);
-    Promise.all([api.hot(), me ? api.feed() : api.hot()])
+    setHot(null);
+    setAll(null);
+    const categories = tab === "casa" ? HOME_TAB_CATEGORIES : undefined;
+    const hotQ = { limit: 40, categories };
+    Promise.all([
+      api.hot(undefined, hotQ),
+      me ? api.feed({ limit: 60, categories }) : api.hot(undefined, hotQ),
+    ])
       .then(([h, f]) => {
         setHot(h.offers);
         setAll(f.offers);
       })
       .catch((e: Error) => setError(e.message));
-  }, [ready, me]);
+  }, [ready, me, tab]);
 
   const pro = me?.plan === "pro";
   const lockedCount = (hot ?? []).filter((o) => o.locked).length;
@@ -59,10 +90,33 @@ export default function Ofertas() {
         </Link>
       ) : null}
 
-      <section style={{ marginTop: 32 }}>
-        <h1 className="h2">Quentes agora</h1>
+      <div className={s.tabs} role="tablist" aria-label="Vitrine">
+        <button
+          role="tab"
+          aria-selected={tab !== "casa"}
+          className={s.tab}
+          onClick={() => chooseTab("all")}
+        >
+          Todas
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === "casa"}
+          className={s.tab}
+          onClick={() => chooseTab("casa")}
+        >
+          Casa e eletro
+        </button>
+      </div>
+
+      <section style={{ marginTop: 24 }}>
+        <h1 className="h2">
+          {tab === "casa" ? "Casa e eletro" : "Quentes agora"}
+        </h1>
         <p className="muted" style={{ margin: "8px 0 20px" }}>
-          40% ou mais abaixo do preço normal dos últimos 90 dias.
+          {tab === "casa"
+            ? "TV, geladeira, máquina de lavar, fogão e cozinha com 40% ou mais de desconto."
+            : "40% ou mais abaixo do preço normal dos últimos 90 dias."}
         </p>
         {error ? (
           <p role="alert">

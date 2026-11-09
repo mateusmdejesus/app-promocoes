@@ -76,9 +76,22 @@ export async function call<T>(method: string, path: string, body?: unknown, init
   return json as T;
 }
 
+/** Filtros das listas: até 60 ofertas e só algumas categorias (ex.: aba "Casa e eletro"). */
+export interface ListQuery {
+  limit?: number;
+  categories?: readonly string[];
+}
+const qs = (q?: ListQuery) => {
+  const p = new URLSearchParams();
+  if (q?.limit) p.set('limit', String(q.limit));
+  if (q?.categories?.length) p.set('categories', q.categories.join(','));
+  const s = p.toString();
+  return s ? `?${s}` : '';
+};
+
 export const api = {
-  hot: (revalidate?: number) => call<{ offers: Offer[] }>('GET', '/v1/offers/hot', undefined, { revalidate }),
-  feed: () => call<{ offers: Offer[] }>('GET', '/v1/feed'),
+  hot: (revalidate?: number, q?: ListQuery) => call<{ offers: Offer[] }>('GET', `/v1/offers/hot${qs(q)}`, undefined, { revalidate }),
+  feed: (q?: ListQuery) => call<{ offers: Offer[] }>('GET', `/v1/feed${qs(q)}`),
   /** Versão da oferta para quem está logado, buscada pelo próprio site (ver app/api/o). */
   offerForMe: async (id: string) => {
     const t = token.get();
