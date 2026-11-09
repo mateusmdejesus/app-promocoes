@@ -150,6 +150,8 @@ export function openDb(path: string): DB {
   if (!cols.has('email')) db.exec('ALTER TABLE users ADD COLUMN email TEXT');
   if (!cols.has('apple_sub')) db.exec('ALTER TABLE users ADD COLUMN apple_sub TEXT');
   if (!cols.has('pro_until')) db.exec('ALTER TABLE users ADD COLUMN pro_until INTEGER');
+  const pcols = new Set((db.prepare('PRAGMA table_info(products)').all() as Array<{ name: string }>).map((c) => c.name));
+  if (!pcols.has('seller')) db.exec('ALTER TABLE products ADD COLUMN seller TEXT');
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email);
     CREATE UNIQUE INDEX IF NOT EXISTS users_apple ON users (apple_sub);

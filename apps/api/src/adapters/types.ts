@@ -11,6 +11,8 @@ export interface ListingSnapshot {
   /** Link para a loja (de afiliado, quando configurado). */
   url: string;
   imageUrl?: string;
+  /** Loja que vende de fato, quando a fonte junta várias (Lomadee). */
+  seller?: string;
 }
 
 export interface StoreAdapter {

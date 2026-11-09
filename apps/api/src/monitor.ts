@@ -7,7 +7,7 @@ import {
   lockedUntil,
   planFor,
   matchesAlert,
-  STORE_NAMES,
+  storeLabel,
   type PriceAnalysis,
   type Product,
   type PushReason,
@@ -123,7 +123,7 @@ async function notify(repo: Repo, deals: NewDeal[], sender: PushSender, now: Dat
       if (!reason) continue;
       if (!canPush({ sentLast24h: sentToday, lastSentForProduct: repo.lastPushFor(userId, d.product.id) }, now, reason)) continue;
 
-      const store = STORE_NAMES[d.product.store];
+      const store = storeLabel(d.product);
       const price = formatBRL(d.analysis.price);
       const ref = formatBRL(d.analysis.referencePrice);
       const msg = {

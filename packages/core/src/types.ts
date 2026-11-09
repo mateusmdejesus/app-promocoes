@@ -1,5 +1,6 @@
 /** Lojas monitoradas. `demo` gera dados de exemplo para desenvolvimento. */
-export type StoreId = 'mercadolivre' | 'amazon' | 'magalu' | 'aliexpress' | 'kabum' | 'demo';
+/** `lomadee` é uma rede de afiliados com várias lojas: a loja de cada produto vai em `Product.seller`. */
+export type StoreId = 'mercadolivre' | 'amazon' | 'magalu' | 'aliexpress' | 'kabum' | 'lomadee' | 'demo';
 
 export const STORE_NAMES: Record<StoreId, string> = {
   mercadolivre: 'Mercado Livre',
@@ -7,6 +8,7 @@ export const STORE_NAMES: Record<StoreId, string> = {
   magalu: 'Magalu',
   aliexpress: 'AliExpress',
   kabum: 'KaBuM!',
+  lomadee: 'Loja parceira',
   demo: 'Loja de exemplo',
 };
 
@@ -63,7 +65,12 @@ export interface Product {
   category: Category;
   url: string;
   imageUrl?: string;
+  /** Loja que vende de fato, quando a fonte junta várias (ex.: "Shopee" via Lomadee). */
+  seller?: string;
 }
+
+/** Nome da loja para mostrar: a loja real quando a fonte junta várias. */
+export const storeLabel = (p: Pick<Product, 'store' | 'seller'>): string => p.seller || STORE_NAMES[p.store];
 
 /** Resultado da análise de preço de um produto num momento. */
 export interface PriceAnalysis {

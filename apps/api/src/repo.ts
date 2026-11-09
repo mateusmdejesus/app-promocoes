@@ -42,11 +42,11 @@ export class Repo {
     const id = existing ? String(existing.id) : `${store}:${s.externalId}`;
     this.db
       .prepare(
-        `INSERT INTO products (id, store, external_id, title, category, url, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET title = excluded.title, category = excluded.category, url = excluded.url, image_url = excluded.image_url`,
+        `INSERT INTO products (id, store, external_id, title, category, url, image_url, seller) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET title = excluded.title, category = excluded.category, url = excluded.url, image_url = excluded.image_url, seller = excluded.seller`,
       )
-      .run(id, store, s.externalId, s.title, s.category, s.url, s.imageUrl ?? null);
-    return { id, store, externalId: s.externalId, title: s.title, category: s.category, url: s.url, imageUrl: s.imageUrl };
+      .run(id, store, s.externalId, s.title, s.category, s.url, s.imageUrl ?? null, s.seller ?? null);
+    return { id, store, externalId: s.externalId, title: s.title, category: s.category, url: s.url, imageUrl: s.imageUrl, seller: s.seller };
   }
 
   productCount(): number {
@@ -388,7 +388,7 @@ function toCharge(r: Row): PixCharge {
   };
 }
 
-const OFFER_SELECT = `SELECT o.*, p.store, p.external_id, p.title, p.category, p.url, p.image_url
+const OFFER_SELECT = `SELECT o.*, p.store, p.external_id, p.title, p.category, p.url, p.image_url, p.seller
   FROM offers o JOIN products p ON p.id = o.product_id`;
 
 function toPoint(r: Row): PricePoint {
@@ -405,6 +405,7 @@ function toOffer(r: Row): OfferRow {
       category: r.category as Category,
       url: String(r.url),
       imageUrl: r.image_url == null ? undefined : String(r.image_url),
+      seller: r.seller == null ? undefined : String(r.seller),
     },
     analysis: {
       price: n(r.price),

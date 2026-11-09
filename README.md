@@ -69,7 +69,8 @@ Testes: `npm test` na raiz.
 | Loja de exemplo (`demo`) | Funciona. Gera preços realistas, inclusive "de" inflado, para desenvolver sem depender de ninguém. |
 | Mercado Livre | Coletor pela API oficial, com renovação automática do acesso. Lê os mais vendidos por categoria (`/highlights` + `/items`) e a busca, se liberada (para aplicações novas ela responde 403). Precisa de `ML_CLIENT_ID`, `ML_CLIENT_SECRET` e `ML_REFRESH_TOKEN`. |
 | Amazon | A fazer, via Keepa (serviço pago de histórico de preços da Amazon). |
-| KaBuM! e outras | A fazer, via feed de produtos da Awin (o cadastro de parceiro é só a chave de acesso aos dados). |
+| Lomadee (Shopee, Lojas REDE, Mondial e outras) | Coletor pronto (`adapters/lomadee.ts`), busca por termo. Precisa de `LOMADEE_API_KEY` (escopo `products:read`) e `lomadee` em `STORES`. Só vêm produtos das marcas a que a conta de afiliado tem acesso. |
+| KaBuM! e outras | A fazer, via Awin, se não estiverem na Lomadee. |
 
 Para conectar o Mercado Livre (uma vez só): no aplicativo de desenvolvedor, use o link de autorização para receber um código, e rode `npm run ml:connect -w @keropromo/api -- CODIGO`. Ele imprime o `ML_REFRESH_TOKEN`, que vai no Railway. O código vale uma vez e por pouco tempo.
 

@@ -1,4 +1,5 @@
 import { DemoAdapter } from './adapters/demo';
+import { LomadeeAdapter } from './adapters/lomadee';
 import { MercadoLivreAdapter } from './adapters/mercadolivre';
 import type { DB } from './db';
 import { MercadoLivreAuth } from './mercadolivreAuth';
@@ -12,6 +13,7 @@ export const config = {
   mlClientId: process.env.ML_CLIENT_ID ?? '',
   mlClientSecret: process.env.ML_CLIENT_SECRET ?? '',
   mlRefreshToken: process.env.ML_REFRESH_TOKEN ?? '',
+  lomadeeApiKey: process.env.LOMADEE_API_KEY ?? '',
   appleBundleId: process.env.APPLE_BUNDLE_ID ?? '',
   resendApiKey: process.env.RESEND_API_KEY ?? '',
   emailFrom: process.env.EMAIL_FROM ?? 'keropromo <acesso@keropromo.app>',
@@ -31,6 +33,9 @@ export function buildAdapters(db: DB): StoreAdapter[] {
       if (!config.mlClientId || !config.mlClientSecret) throw new Error('STORES inclui mercadolivre, mas ML_CLIENT_ID ou ML_CLIENT_SECRET estão vazios.');
       const auth = new MercadoLivreAuth({ clientId: config.mlClientId, clientSecret: config.mlClientSecret, db, bootstrapRefreshToken: config.mlRefreshToken || undefined });
       out.push(new MercadoLivreAdapter({ auth }));
+    } else if (s === 'lomadee') {
+      if (!config.lomadeeApiKey) throw new Error('STORES inclui lomadee, mas LOMADEE_API_KEY está vazio.');
+      out.push(new LomadeeAdapter({ apiKey: config.lomadeeApiKey }));
     } else throw new Error(`Loja desconhecida em STORES: ${s}`);
   }
   return out;

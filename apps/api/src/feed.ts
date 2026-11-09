@@ -1,4 +1,4 @@
-import { categoryAffinity, lockedUntil, offerScore, personalScore, recentSearchTerms, STORE_NAMES, tokenize, type Category, type Plan, type Tier } from '@keropromo/core';
+import { categoryAffinity, lockedUntil, offerScore, personalScore, recentSearchTerms, storeLabel, tokenize, type Category, type Plan, type Tier } from '@keropromo/core';
 import type { OfferRow, Repo } from './repo';
 
 const DAY_MS = 86_400_000;
@@ -35,7 +35,7 @@ export function toDTO(o: OfferRow, plan: Plan, now: Date): OfferDTO {
     title: o.product.title,
     category: o.product.category,
     store: o.product.store,
-    storeName: STORE_NAMES[o.product.store],
+    storeName: storeLabel(o.product),
     url: until ? null : o.product.url,
     imageUrl: o.product.imageUrl ?? null,
     price: until ? null : o.analysis.price,
