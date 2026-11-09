@@ -93,6 +93,44 @@ export function openDb(path: string): DB {
       at INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS pushes_user_at ON pushes (user_id, at);
+
+    -- Sessões de login (uma por aparelho). Guardamos só o hash do token.
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at INTEGER NOT NULL
+    );
+
+    -- Código de 6 dígitos enviado por e-mail.
+    CREATE TABLE IF NOT EXISTS email_codes (
+      email TEXT PRIMARY KEY,
+      code_hash TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+
+    -- Notificações do plano grátis que saem com atraso.
+    CREATE TABLE IF NOT EXISTS pending_pushes (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      price INTEGER NOT NULL,
+      send_after INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS pending_pushes_due ON pending_pushes (send_after);
+  `);
+
+  // Colunas adicionadas depois da primeira versão (bancos antigos não as têm).
+  const cols = new Set((db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>).map((c) => c.name));
+  if (!cols.has('email')) db.exec('ALTER TABLE users ADD COLUMN email TEXT');
+  if (!cols.has('apple_sub')) db.exec('ALTER TABLE users ADD COLUMN apple_sub TEXT');
+  if (!cols.has('pro_until')) db.exec('ALTER TABLE users ADD COLUMN pro_until INTEGER');
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users (email);
+    CREATE UNIQUE INDEX IF NOT EXISTS users_apple ON users (apple_sub);
   `);
   return db;
 }

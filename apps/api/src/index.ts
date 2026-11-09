@@ -1,3 +1,4 @@
+import { AppleJwtVerifier, LogEmailSender, ResendEmailSender } from './auth';
 import { buildAdapters, config } from './config';
 import { openDb } from './db';
 import { runMonitor } from './monitor';
@@ -23,7 +24,13 @@ async function tick() {
   }
 }
 
-const app = buildServer(repo);
+const app = buildServer(repo, {
+  email: config.resendApiKey ? new ResendEmailSender(config.resendApiKey, config.emailFrom) : new LogEmailSender(),
+  apple: config.appleBundleId ? new AppleJwtVerifier(config.appleBundleId) : undefined,
+  revenuecatAuth: config.revenuecatWebhookAuth || undefined,
+  allowDevPurchases: config.allowDevPurchases,
+});
+if (!config.resendApiKey) console.log('[auth] RESEND_API_KEY vazio: os códigos de login aparecem aqui no terminal.');
 await app.listen({ port: config.port, host: '0.0.0.0' });
 console.log(`keropromo API em http://localhost:${config.port}`);
 await tick();

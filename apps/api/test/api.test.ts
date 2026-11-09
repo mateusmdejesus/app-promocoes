@@ -6,6 +6,12 @@ import { runMonitor } from '../src/monitor';
 import { LogPushSender } from '../src/push';
 import { Repo } from '../src/repo';
 import { buildServer } from '../src/server';
+import { LogEmailSender, type AppleVerifier } from '../src/auth';
+
+let email: LogEmailSender;
+/** Apple de mentira: o "token" é o próprio sub; "bad" é rejeitado. */
+const fakeApple: AppleVerifier = { verify: async (t) => { if (t.startsWith('bad')) throw new Error('x'); const [sub, mail] = t.split('|'); return { sub: sub!, email: mail }; } };
+const serverAt = (now?: Date) => buildServer(repo, { clock: now ? () => now : undefined, email, apple: fakeApple, revenuecatAuth: 'rc-secret', allowDevPurchases: true });
 
 const DAY = 86_400_000;
 const T0 = new Date('2026-09-01T15:00:00Z').getTime();
@@ -35,6 +41,7 @@ beforeEach(() => {
   repo = new Repo(openDb(':memory:'));
   store = new FakeStore();
   sender = new LogPushSender();
+  email = new LogEmailSender();
   store.set('af', 'Air Fryer 4L Digital', 'casa', 51900);
   store.set('fone', 'Fone Bluetooth Over-ear', 'eletronicos', 28900);
   store.set('tenis', 'Tênis de Corrida', 'esporte', 40000, 64000);
@@ -56,9 +63,9 @@ describe('monitor', () => {
     expect(tenis.analysis.inflatedListPrice).toBe(true);
   });
 
-  it('notifica por interesse e por alerta, sem repetir o mesmo produto', async () => {
+  it('Pro recebe oferta quente na hora; grátis recebe o alerta com 1 h de atraso', async () => {
     await stableHistory();
-    const app = buildServer(repo, () => new Date(T0 + 30 * DAY));
+    const app = serverAt(new Date(T0 + 30 * DAY));
     const a = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
     const b = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
     const c = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
@@ -70,20 +77,29 @@ describe('monitor', () => {
     const created = await app.inject({ method: 'POST', url: '/v1/alerts', headers: auth(b), payload: { term: 'air fryer', maxPrice: 30000 } });
     expect(created.statusCode).toBe(201);
 
+    // A assina o Pro; B e C ficam no grátis.
+    await app.inject({ method: 'POST', url: '/v1/dev/grant-pro', headers: auth(a), payload: { period: 'monthly' } });
+
     const now = new Date(T0 + 30 * DAY);
     store.set('af', 'Air Fryer 4L Digital', 'casa', 24900);
     const r = await runMonitor(repo, [store], sender, now);
 
-    expect(r.pushesSent).toBe(2);
-    expect(sender.sent.map((m) => m.to).sort()).toEqual(['tok-a', 'tok-b']);
-    expect(sender.sent.find((m) => m.to === 'tok-b')!.title).toBe('Seu alerta: air fryer');
-    expect(sender.sent.find((m) => m.to === 'tok-a')!.body).toContain('De R$ 519 por R$ 249');
+    // Pro recebe a oferta quente na hora. O alerta de B (grátis) fica na fila por 1 h.
+    expect(r.pushesSent).toBe(1);
+    expect(sender.sent.map((m) => m.to)).toEqual(['tok-a']);
+    expect(sender.sent[0]!.body).toContain('De R$ 519 por R$ 249');
 
-    // Cai mais um pouco 1 h depois: é novidade, mas o mesmo produto não repete em 7 dias.
+    // 1 h depois, preço mantido: sai a notificação atrasada de B. A não recebe de novo.
+    const r2 = await runMonitor(repo, [store], sender, new Date(now.getTime() + 61 * 60_000));
+    expect(r2.pushesSent).toBe(1);
+    expect(sender.sent.at(-1)).toMatchObject({ to: 'tok-b', title: 'Seu alerta: air fryer' });
+
+    // Cai mais um pouco: é novidade, mas o mesmo produto não repete em 7 dias.
     store.set('af', 'Air Fryer 4L Digital', 'casa', 23900);
-    const r2 = await runMonitor(repo, [store], sender, new Date(now.getTime() + 3_600_000));
-    expect(r2.newDeals).toBe(1);
-    expect(r2.pushesSent).toBe(0);
+    const r3 = await runMonitor(repo, [store], sender, new Date(now.getTime() + 2 * 3_600_000));
+    expect(r3.newDeals).toBe(1);
+    expect(r3.pushesSent).toBe(0);
+    expect(sender.sent).toHaveLength(2);
   });
 
   it('uma loja com erro não derruba a varredura', async () => {
@@ -101,7 +117,7 @@ describe('API', () => {
     store.set('af', 'Air Fryer 4L Digital', 'casa', 24900); // −52%
     store.set('fone', 'Fone Bluetooth Over-ear', 'eletronicos', 18900); // −34%
     await runMonitor(repo, [store], sender, now, { notify: false });
-    const app = buildServer(repo, () => now);
+    const app = serverAt(now);
 
     const u = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
     const headers = { authorization: `Bearer ${u.secret}` };
@@ -114,9 +130,24 @@ describe('API', () => {
     const feed = (await app.inject({ method: 'GET', url: '/v1/feed', headers })).json();
     expect(feed.offers.map((o: { id: string }) => o.id)).toEqual(['mercadolivre:fone', 'mercadolivre:af']);
 
-    const detail = (await app.inject({ method: 'GET', url: '/v1/offers/mercadolivre:af' })).json();
-    expect(detail.offer).toMatchObject({ price: 24900, referencePrice: 51900, tier: 'hot', storeName: 'Mercado Livre' });
+    // Grátis: a oferta quente acabou de aparecer, então chega travada (sem preço nem link).
+    const locked = (await app.inject({ method: 'GET', url: '/v1/offers/mercadolivre:af', headers })).json();
+    expect(locked.offer).toMatchObject({ locked: true, price: null, url: null, discountPct: 52 });
+    expect(locked.history).toEqual([]);
+    expect(feed.offers[0]).toMatchObject({ locked: false, price: 18900 });
+
+    // Pro: tudo liberado, com 90 dias de histórico.
+    await app.inject({ method: 'POST', url: '/v1/dev/grant-pro', headers, payload: { period: 'yearly' } });
+    const detail = (await app.inject({ method: 'GET', url: '/v1/offers/mercadolivre:af', headers })).json();
+    expect(detail.offer).toMatchObject({ locked: false, price: 24900, referencePrice: 51900, tier: 'hot', storeName: 'Mercado Livre' });
+    expect(detail.historyDays).toBe(90);
     expect(detail.history.length).toBeGreaterThan(20);
+
+    // 1 h depois, quem é grátis também vê, mas com só 7 dias de histórico.
+    const later = (await serverAt(new Date(now.getTime() + 61 * 60_000)).inject({ method: 'GET', url: '/v1/offers/mercadolivre:af' })).json();
+    expect(later.offer.locked).toBe(false);
+    expect(later.historyDays).toBe(7);
+    expect(later.history.length).toBeLessThanOrEqual(8);
 
     const found = (await app.inject({ method: 'GET', url: '/v1/search?q=air%20fr', headers })).json();
     expect(found.offers).toHaveLength(1);
@@ -125,7 +156,7 @@ describe('API', () => {
   });
 
   it('exige autenticação e valida alertas', async () => {
-    const app = buildServer(repo);
+    const app = serverAt();
     expect((await app.inject({ method: 'GET', url: '/v1/feed' })).statusCode).toBe(401);
     const u = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
     const headers = { authorization: `Bearer ${u.secret}` };
@@ -135,6 +166,88 @@ describe('API', () => {
     const off = (await app.inject({ method: 'PATCH', url: `/v1/alerts/${ok.alert.id}`, headers, payload: { enabled: false } })).json();
     expect(off.alert.enabled).toBe(false);
     expect((await app.inject({ method: 'DELETE', url: `/v1/alerts/${ok.alert.id}`, headers })).statusCode).toBe(204);
+  });
+});
+
+describe('contas', () => {
+  it('login por e-mail com código: conta anônima vira a conta da pessoa e mantém os interesses', async () => {
+    const app = serverAt();
+    const anon = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
+    const anonH = { authorization: `Bearer ${anon.secret}` };
+    await app.inject({ method: 'PUT', url: '/v1/me', headers: anonH, payload: { categories: ['games'] } });
+
+    expect((await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: 'Ana@Exemplo.com ' } })).statusCode).toBe(204);
+    // Pedir outro código logo em seguida é bloqueado.
+    expect((await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: 'ana@exemplo.com' } })).statusCode).toBe(429);
+    const code = email.last.get('ana@exemplo.com')!;
+    const wrong = code === '000000' ? '111111' : '000000';
+    expect((await app.inject({ method: 'POST', url: '/v1/auth/email/verify', headers: anonH, payload: { email: 'ana@exemplo.com', code: wrong } })).statusCode).toBe(400);
+
+    const ok = (await app.inject({ method: 'POST', url: '/v1/auth/email/verify', headers: anonH, payload: { email: 'ana@exemplo.com', code } })).json();
+    expect(ok).toMatchObject({ userId: anon.userId, isNew: false });
+    const me = (await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${ok.token}` } })).json();
+    expect(me).toMatchObject({ email: 'ana@exemplo.com', identified: true, plan: 'free', categories: ['games'] });
+    // O código vale uma vez só.
+    expect((await app.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: 'ana@exemplo.com', code } })).statusCode).toBe(400);
+  });
+
+  it('entrar de novo em outro aparelho cai na mesma conta; Apple com o mesmo e-mail também', async () => {
+    const app = serverAt(new Date(T0));
+    await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: 'bia@x.com' } });
+    const first = (await app.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: 'bia@x.com', code: email.last.get('bia@x.com') } })).json();
+    expect(first.isNew).toBe(true);
+
+    const app2 = serverAt(new Date(T0 + 60_000));
+    await app2.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: 'bia@x.com' } });
+    const again = (await app2.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: 'bia@x.com', code: email.last.get('bia@x.com') } })).json();
+    expect(again).toMatchObject({ userId: first.userId, isNew: false });
+
+    const apple = (await app.inject({ method: 'POST', url: '/v1/auth/apple', payload: { identityToken: 'apple-sub-1|bia@x.com' } })).json();
+    expect(apple.userId).toBe(first.userId);
+    const appleAgain = (await app.inject({ method: 'POST', url: '/v1/auth/apple', payload: { identityToken: 'apple-sub-1' } })).json();
+    expect(appleAgain.userId).toBe(first.userId);
+    expect((await app.inject({ method: 'POST', url: '/v1/auth/apple', payload: { identityToken: 'bad-token-xyz' } })).statusCode).toBe(401);
+
+    // Sair invalida só a sessão daquele aparelho.
+    await app.inject({ method: 'POST', url: '/v1/auth/logout', headers: { authorization: `Bearer ${apple.token}` } });
+    expect((await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${apple.token}` } })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${first.token}` } })).statusCode).toBe(200);
+
+    // Excluir a conta apaga tudo.
+    expect((await app.inject({ method: 'DELETE', url: '/v1/me', headers: { authorization: `Bearer ${first.token}` } })).statusCode).toBe(204);
+    expect((await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${again.token}` } })).statusCode).toBe(401);
+  });
+});
+
+describe('assinatura', () => {
+  it('webhook do RevenueCat liga e desliga o Pro; grátis tem 1 alerta', async () => {
+    const now = new Date(T0);
+    const app = serverAt(now);
+    const u = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
+    const headers = { authorization: `Bearer ${u.secret}` };
+    const hook = (type: string, exp?: number) =>
+      app.inject({ method: 'POST', url: '/v1/webhooks/revenuecat', headers: { authorization: 'rc-secret' }, payload: { event: { type, app_user_id: u.userId, expiration_at_ms: exp ?? null } } });
+
+    expect((await app.inject({ method: 'POST', url: '/v1/alerts', headers, payload: { term: 'tenis', minTier: 'hot' } })).statusCode).toBe(201);
+    const second = await app.inject({ method: 'POST', url: '/v1/alerts', headers, payload: { term: 'fone', minTier: 'hot' } });
+    expect(second.statusCode).toBe(402);
+    expect(second.json().upgrade).toBe(true);
+
+    expect((await app.inject({ method: 'POST', url: '/v1/webhooks/revenuecat', headers: { authorization: 'errado' }, payload: {} })).statusCode).toBe(401);
+    await hook('INITIAL_PURCHASE', T0 + 30 * DAY);
+    expect((await app.inject({ method: 'GET', url: '/v1/me', headers })).json().plan).toBe('pro');
+    expect((await app.inject({ method: 'POST', url: '/v1/alerts', headers, payload: { term: 'fone', minTier: 'hot' } })).statusCode).toBe(201);
+
+    await hook('CANCELLATION');
+    expect((await app.inject({ method: 'GET', url: '/v1/me', headers })).json().plan).toBe('pro');
+    await hook('EXPIRATION');
+    expect((await app.inject({ method: 'GET', url: '/v1/me', headers })).json().plan).toBe('free');
+
+    const plans = (await app.inject({ method: 'GET', url: '/v1/plans' })).json();
+    expect(plans.plans).toEqual([
+      { id: 'yearly', price: 11900, perMonth: 992 },
+      { id: 'monthly', price: 1490, perMonth: 1490 },
+    ]);
   });
 });
 

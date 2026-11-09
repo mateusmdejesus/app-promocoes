@@ -140,3 +140,20 @@ describe('formatBRL', () => {
     expect(formatBRL(129900)).toBe('R$ 1.299');
   });
 });
+
+describe('planos', () => {
+  it('Pro vale até a data de expiração', async () => {
+    const { planFor } = await import('../src');
+    expect(planFor(undefined, now)).toBe('free');
+    expect(planFor(new Date(now.getTime() + 1000), now)).toBe('pro');
+    expect(planFor(new Date(now.getTime() - 1000), now)).toBe('free');
+  });
+  it('no grátis, oferta quente fica travada por 1 hora; promoção comum não', async () => {
+    const { lockedUntil } = await import('../src');
+    const detected = new Date(now.getTime() - 20 * 60_000);
+    expect(lockedUntil('free', 'hot', detected, now)?.getTime()).toBe(detected.getTime() + 3_600_000);
+    expect(lockedUntil('free', 'promo', detected, now)).toBeUndefined();
+    expect(lockedUntil('pro', 'hot', detected, now)).toBeUndefined();
+    expect(lockedUntil('free', 'hot', new Date(now.getTime() - 61 * 60_000), now)).toBeUndefined();
+  });
+});

@@ -105,8 +105,96 @@ export class Repo {
   }
 
   userIdBySecret(secret: string): string | undefined {
-    const r = this.db.prepare('SELECT id FROM users WHERE secret_hash = ?').get(sha256(secret)) as Row | undefined;
+    const h = sha256(secret);
+    const r = (this.db.prepare('SELECT user_id AS id FROM sessions WHERE token_hash = ?').get(h) ?? this.db.prepare('SELECT id FROM users WHERE secret_hash = ?').get(h)) as Row | undefined;
     return r ? String(r.id) : undefined;
+  }
+
+  /** Abre uma sessão de login e devolve o token (o banco guarda só o hash). */
+  createSession(userId: string, now: Date): string {
+    const token = randomBytes(32).toString('base64url');
+    this.db.prepare('INSERT INTO sessions (token_hash, user_id, created_at) VALUES (?, ?, ?)').run(sha256(token), userId, now.getTime());
+    return token;
+  }
+
+  deleteSession(token: string): void {
+    this.db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(sha256(token));
+  }
+
+  /** Cria um usuário já identificado (sem o segredo anônimo antigo). */
+  createIdentifiedUser(now: Date, ident: { email?: string; appleSub?: string }): string {
+    const id = randomUUID();
+    this.db
+      .prepare('INSERT INTO users (id, secret_hash, email, apple_sub, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(id, sha256(randomBytes(32).toString('base64url')), ident.email ?? null, ident.appleSub ?? null, now.getTime());
+    return id;
+  }
+
+  userByEmail(email: string): string | undefined {
+    const r = this.db.prepare('SELECT id FROM users WHERE email = ?').get(email) as Row | undefined;
+    return r ? String(r.id) : undefined;
+  }
+
+  userByApple(sub: string): string | undefined {
+    const r = this.db.prepare('SELECT id FROM users WHERE apple_sub = ?').get(sub) as Row | undefined;
+    return r ? String(r.id) : undefined;
+  }
+
+  account(userId: string): { email?: string; hasApple: boolean; proUntil?: Date } | undefined {
+    const r = this.db.prepare('SELECT email, apple_sub, pro_until FROM users WHERE id = ?').get(userId) as Row | undefined;
+    if (!r) return undefined;
+    return { email: (r.email ?? undefined) as string | undefined, hasApple: r.apple_sub != null, proUntil: r.pro_until == null ? undefined : new Date(n(r.pro_until)) };
+  }
+
+  /** Conta anônima que ainda não tem e-mail nem Apple pode receber a identidade. */
+  isAnonymous(userId: string): boolean {
+    const a = this.account(userId);
+    return !!a && !a.email && !a.hasApple;
+  }
+
+  setEmail(userId: string, email: string): void {
+    this.db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, userId);
+  }
+
+  setAppleSub(userId: string, sub: string): void {
+    this.db.prepare('UPDATE users SET apple_sub = ? WHERE id = ?').run(sub, userId);
+  }
+
+  setProUntil(userId: string, until: Date | null): boolean {
+    return n(this.db.prepare('UPDATE users SET pro_until = ? WHERE id = ?').run(until?.getTime() ?? null, userId).changes) > 0;
+  }
+
+  /** Exclusão de conta (exigência da Apple): apaga tudo do usuário. */
+  deleteUser(userId: string): void {
+    this.db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  }
+
+  // ---------- código por e-mail ----------
+
+  saveEmailCode(email: string, code: string, now: Date, ttlMin = 10): void {
+    this.db
+      .prepare(
+        `INSERT INTO email_codes (email, code_hash, expires_at, attempts, created_at) VALUES (?, ?, ?, 0, ?)
+         ON CONFLICT(email) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, created_at = excluded.created_at`,
+      )
+      .run(email, sha256(`${email}:${code}`), now.getTime() + ttlMin * 60_000, now.getTime());
+  }
+
+  lastEmailCodeAt(email: string): Date | undefined {
+    const r = this.db.prepare('SELECT created_at FROM email_codes WHERE email = ?').get(email) as Row | undefined;
+    return r ? new Date(n(r.created_at)) : undefined;
+  }
+
+  /** Confere o código. Máximo de 5 tentativas; o código vale uma vez só. */
+  checkEmailCode(email: string, code: string, now: Date): 'ok' | 'wrong' | 'expired' {
+    const r = this.db.prepare('SELECT code_hash, expires_at, attempts FROM email_codes WHERE email = ?').get(email) as Row | undefined;
+    if (!r || n(r.expires_at) < now.getTime() || n(r.attempts) >= 5) return 'expired';
+    if (r.code_hash !== sha256(`${email}:${code}`)) {
+      this.db.prepare('UPDATE email_codes SET attempts = attempts + 1 WHERE email = ?').run(email);
+      return 'wrong';
+    }
+    this.db.prepare('DELETE FROM email_codes WHERE email = ?').run(email);
+    return 'ok';
   }
 
   setPushToken(userId: string, token: string | null): void {
@@ -180,6 +268,30 @@ export class Repo {
 
   recordPush(userId: string, productId: string, reason: string, at: Date): void {
     this.db.prepare('INSERT INTO pushes (user_id, product_id, reason, at) VALUES (?, ?, ?, ?)').run(userId, productId, reason, at.getTime());
+  }
+
+  queuePush(p: { userId: string; productId: string; reason: string; title: string; body: string; price: number; sendAfter: Date }): void {
+    // Uma notificação pendente por produto e pessoa basta.
+    this.db.prepare('DELETE FROM pending_pushes WHERE user_id = ? AND product_id = ?').run(p.userId, p.productId);
+    this.db
+      .prepare('INSERT INTO pending_pushes (user_id, product_id, reason, title, body, price, send_after) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(p.userId, p.productId, p.reason, p.title, p.body, p.price, p.sendAfter.getTime());
+  }
+
+  hasQueuedPush(userId: string, productId: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM pending_pushes WHERE user_id = ? AND product_id = ?').get(userId, productId);
+  }
+
+  /** Retira da fila as notificações cujo atraso já passou. */
+  takeDuePushes(now: Date): Array<{ userId: string; productId: string; reason: string; title: string; body: string; price: number }> {
+    const rows = this.db.prepare('SELECT * FROM pending_pushes WHERE send_after <= ?').all(now.getTime()) as Row[];
+    this.db.prepare('DELETE FROM pending_pushes WHERE send_after <= ?').run(now.getTime());
+    return rows.map((r) => ({ userId: String(r.user_id), productId: String(r.product_id), reason: String(r.reason), title: String(r.title), body: String(r.body), price: n(r.price) }));
+  }
+
+  pushToken(userId: string): string | undefined {
+    const r = this.db.prepare('SELECT push_token FROM users WHERE id = ?').get(userId) as Row | undefined;
+    return r?.push_token == null ? undefined : String(r.push_token);
   }
 }
 

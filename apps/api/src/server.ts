@@ -1,6 +1,8 @@
+import { randomInt } from 'node:crypto';
 import Fastify, { type FastifyRequest } from 'fastify';
-import { CATEGORIES, HISTORY_WINDOW_DAYS } from '@keropromo/core';
+import { CATEGORIES, LIMITS, planFor, PRICES, type Plan } from '@keropromo/core';
 import { z } from 'zod';
+import { normalizeEmail, type AppleVerifier, type EmailSender } from './auth';
 import { hotOffers, personalFeed, search, toDTO } from './feed';
 import type { Repo } from './repo';
 
@@ -17,7 +19,22 @@ const alertBody = z.object({
   enabled: z.boolean().default(true),
 });
 
-export function buildServer(repo: Repo, clock: () => Date = () => new Date()) {
+export interface ServerDeps {
+  clock?: () => Date;
+  email: EmailSender;
+  /** Sem ele, "Entrar com Apple" responde 503 (falta configurar APPLE_BUNDLE_ID). */
+  apple?: AppleVerifier;
+  /** Valor esperado no cabeçalho Authorization do webhook do RevenueCat. */
+  revenuecatAuth?: string;
+  /** Libera /v1/dev/grant-pro para testar o Pro antes de existir loja. Nunca em produção. */
+  allowDevPurchases?: boolean;
+}
+
+/** Eventos do RevenueCat que estendem o acesso até `expiration_at_ms`. */
+const GRANTING_EVENTS = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION', 'NON_RENEWING_PURCHASE', 'SUBSCRIPTION_EXTENDED', 'TEMPORARY_ENTITLEMENT_GRANT']);
+
+export function buildServer(repo: Repo, deps: ServerDeps) {
+  const clock = deps.clock ?? (() => new Date());
   const app = Fastify({ logger: false });
 
   app.setErrorHandler((err: Error, _req, reply) => {
@@ -26,20 +43,119 @@ export function buildServer(repo: Repo, clock: () => Date = () => new Date()) {
     return reply.status(status).send({ error: status === 500 ? 'internal_error' : err.message });
   });
 
-  /** Autenticação simples por segredo do aparelho (Authorization: Bearer <segredo>). */
-  const userOf = (req: FastifyRequest): string => {
+  const fail = (statusCode: number, message: string) => Object.assign(new Error(message), { statusCode });
+  const bearer = (req: FastifyRequest) => {
     const h = req.headers.authorization;
-    const id = h?.startsWith('Bearer ') ? repo.userIdBySecret(h.slice(7)) : undefined;
-    if (!id) throw Object.assign(new Error('unauthorized'), { statusCode: 401 });
+    return h?.startsWith('Bearer ') ? h.slice(7) : undefined;
+  };
+  const optionalUser = (req: FastifyRequest): string | undefined => {
+    const t = bearer(req);
+    return t ? repo.userIdBySecret(t) : undefined;
+  };
+  const userOf = (req: FastifyRequest): string => {
+    const id = optionalUser(req);
+    if (!id) throw fail(401, 'unauthorized');
     return id;
+  };
+  const planOf = (userId: string | undefined): Plan => (userId ? planFor(repo.account(userId)?.proUntil, clock()) : 'free');
+
+  /**
+   * Depois de provar a identidade (e-mail ou Apple): se já existe conta com ela, entra nela;
+   * se quem chama tem uma conta anônima, a identidade passa a ser dela (mantém interesses e alertas);
+   * senão, cria uma conta nova.
+   */
+  const signIn = (req: FastifyRequest, found: string | undefined, attach: (userId: string) => void, create: () => string) => {
+    const now = clock();
+    const caller = optionalUser(req);
+    let userId = found;
+    let isNew = false;
+    if (!userId && caller && repo.isAnonymous(caller)) {
+      attach(caller);
+      userId = caller;
+    }
+    if (!userId) {
+      userId = create();
+      isNew = true;
+    }
+    if (caller && caller !== userId && repo.categories(userId).length === 0) repo.setCategories(userId, repo.categories(caller));
+    return { userId, token: repo.createSession(userId, now), isNew };
   };
 
   app.get('/health', async () => ({ ok: true }));
 
-  // Cadastro anônimo do aparelho. O app guarda o segredo no armazenamento seguro.
+  // ---------- conta ----------
+
+  // Conta anônima do aparelho, usada até a pessoa se identificar no onboarding.
   app.post('/v1/users', async (_req, reply) => {
     const u = repo.createUser(clock());
     return reply.status(201).send({ userId: u.id, secret: u.secret });
+  });
+
+  app.post('/v1/auth/email/start', async (req, reply) => {
+    const email = normalizeEmail(z.object({ email: z.string().trim().email().max(200) }).parse(req.body).email);
+    const now = clock();
+    const last = repo.lastEmailCodeAt(email);
+    if (last && now.getTime() - last.getTime() < 30_000) return reply.status(429).send({ error: 'Espere alguns segundos para pedir outro código.' });
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    repo.saveEmailCode(email, code, now);
+    await deps.email.sendCode(email, code);
+    return reply.status(204).send();
+  });
+
+  app.post('/v1/auth/email/verify', async (req) => {
+    const body = z.object({ email: z.string().trim().email().max(200), code: z.string().trim().regex(/^\d{6}$/) }).parse(req.body);
+    const email = normalizeEmail(body.email);
+    const check = repo.checkEmailCode(email, body.code, clock());
+    if (check === 'wrong') throw fail(400, 'Código incorreto.');
+    if (check === 'expired') throw fail(400, 'Código expirado. Peça um novo.');
+    return signIn(
+      req,
+      repo.userByEmail(email),
+      (id) => repo.setEmail(id, email),
+      () => repo.createIdentifiedUser(clock(), { email }),
+    );
+  });
+
+  app.post('/v1/auth/apple', async (req) => {
+    if (!deps.apple) throw fail(503, 'Entrar com Apple ainda não está configurado.');
+    const { identityToken } = z.object({ identityToken: z.string().min(10) }).parse(req.body);
+    const id = await deps.apple.verify(identityToken).catch(() => {
+      throw fail(401, 'Não foi possível confirmar sua conta Apple.');
+    });
+    const byEmail = id.email ? repo.userByEmail(id.email) : undefined;
+    // Mesma pessoa que já tinha entrado por e-mail: a Apple passa a valer para essa conta.
+    if (!repo.userByApple(id.sub) && byEmail && !repo.account(byEmail)?.hasApple) repo.setAppleSub(byEmail, id.sub);
+    return signIn(
+      req,
+      repo.userByApple(id.sub) ?? byEmail,
+      (uid) => {
+        repo.setAppleSub(uid, id.sub);
+        if (id.email && !byEmail) repo.setEmail(uid, id.email);
+      },
+      () => repo.createIdentifiedUser(clock(), { appleSub: id.sub, email: id.email && !byEmail ? id.email : undefined }),
+    );
+  });
+
+  app.post('/v1/auth/logout', async (req, reply) => {
+    const t = bearer(req);
+    if (t) repo.deleteSession(t);
+    return reply.status(204).send();
+  });
+
+  app.get('/v1/me', async (req) => {
+    const userId = userOf(req);
+    const acc = repo.account(userId)!;
+    const plan = planOf(userId);
+    return {
+      userId,
+      email: acc.email ?? null,
+      hasApple: acc.hasApple,
+      identified: !!acc.email || acc.hasApple,
+      plan,
+      proUntil: plan === 'pro' ? acc.proUntil!.toISOString() : null,
+      limits: { ...LIMITS[plan], checksPerMonth: Number.isFinite(LIMITS[plan].checksPerMonth) ? LIMITS[plan].checksPerMonth : null },
+      categories: repo.categories(userId),
+    };
   });
 
   app.put('/v1/me', async (req) => {
@@ -50,24 +166,56 @@ export function buildServer(repo: Repo, clock: () => Date = () => new Date()) {
     return { categories: repo.categories(userId) };
   });
 
-  app.get('/v1/me', async (req) => {
-    const userId = userOf(req);
-    return { userId, categories: repo.categories(userId) };
+  // Exclusão de conta dentro do app: a Apple exige.
+  app.delete('/v1/me', async (req, reply) => {
+    repo.deleteUser(userOf(req));
+    return reply.status(204).send();
   });
 
-  app.get('/v1/offers/hot', async () => ({ offers: hotOffers(repo, clock()) }));
+  // ---------- assinatura ----------
+
+  app.get('/v1/plans', async () => ({
+    plans: [
+      { id: 'yearly', price: PRICES.yearly, perMonth: Math.round(PRICES.yearly / 12) },
+      { id: 'monthly', price: PRICES.monthly, perMonth: PRICES.monthly },
+    ],
+  }));
+
+  // O RevenueCat chama isto a cada compra, renovação ou expiração (app_user_id = nosso userId).
+  app.post('/v1/webhooks/revenuecat', async (req, reply) => {
+    if (!deps.revenuecatAuth || req.headers.authorization !== deps.revenuecatAuth) return reply.status(401).send({ error: 'unauthorized' });
+    const { event } = z
+      .object({ event: z.object({ type: z.string(), app_user_id: z.string(), expiration_at_ms: z.number().nullable().optional() }).passthrough() })
+      .parse(req.body);
+    if (GRANTING_EVENTS.has(event.type) && event.expiration_at_ms) repo.setProUntil(event.app_user_id, new Date(event.expiration_at_ms));
+    else if (event.type === 'EXPIRATION') repo.setProUntil(event.app_user_id, null);
+    // CANCELLATION não tira o acesso: a pessoa usa até o fim do período pago.
+    return reply.status(200).send({ ok: true });
+  });
+
+  app.post('/v1/dev/grant-pro', async (req, reply) => {
+    if (!deps.allowDevPurchases) return reply.status(404).send({ error: 'not_found' });
+    const userId = userOf(req);
+    const { period } = z.object({ period: z.enum(['monthly', 'yearly']) }).parse(req.body);
+    repo.setProUntil(userId, new Date(clock().getTime() + (period === 'yearly' ? 365 : 30) * DAY_MS));
+    return { plan: 'pro' };
+  });
+
+  // ---------- ofertas ----------
+
+  app.get('/v1/offers/hot', async (req) => ({ offers: hotOffers(repo, planOf(optionalUser(req)), clock()) }));
 
   app.get('/v1/feed', async (req) => {
     const userId = userOf(req);
     const q = z.object({ category: category.optional() }).parse(req.query);
-    return { offers: personalFeed(repo, userId, clock(), { category: q.category }) };
+    return { offers: personalFeed(repo, userId, planOf(userId), clock(), { category: q.category }) };
   });
 
   app.get('/v1/search', async (req) => {
     const userId = userOf(req);
     const { q } = z.object({ q: z.string().trim().min(1).max(80) }).parse(req.query);
     const now = clock();
-    const offers = search(repo, q, now);
+    const offers = search(repo, q, planOf(userId), now);
     // A busca é um sinal de interesse: guarda o termo e a categoria do melhor resultado.
     repo.addEvent(userId, { kind: 'search', query: q, category: offers[0]?.category, at: now });
     return { offers };
@@ -77,8 +225,15 @@ export function buildServer(repo: Repo, clock: () => Date = () => new Date()) {
     const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
     const offer = repo.getOffer(id);
     if (!offer) return reply.status(404).send({ error: 'not_found' });
-    const since = new Date(clock().getTime() - HISTORY_WINDOW_DAYS * DAY_MS);
-    return { offer: toDTO(offer), history: repo.dailyLows(id, since) };
+    const plan = planOf(optionalUser(req));
+    const now = clock();
+    const dto = toDTO(offer, plan, now);
+    const days = LIMITS[plan].historyDays;
+    return {
+      offer: dto,
+      historyDays: days,
+      history: dto.locked ? [] : repo.dailyLows(id, new Date(now.getTime() - days * DAY_MS)),
+    };
   });
 
   app.post('/v1/events', async (req, reply) => {
@@ -90,6 +245,8 @@ export function buildServer(repo: Repo, clock: () => Date = () => new Date()) {
     return reply.status(204).send();
   });
 
+  // ---------- alertas ----------
+
   app.get('/v1/alerts', async (req) => ({ alerts: repo.alerts(userOf(req)).map(publicAlert) }));
 
   app.post('/v1/alerts', async (req, reply) => {
@@ -98,7 +255,10 @@ export function buildServer(repo: Repo, clock: () => Date = () => new Date()) {
     if (body.maxPrice === undefined && body.minTier === 'none') {
       return reply.status(400).send({ error: 'Defina um preço máximo ou um desconto mínimo.' });
     }
-    if (repo.alerts(userId).length >= 30) return reply.status(400).send({ error: 'Limite de 30 alertas.' });
+    const plan = planOf(userId);
+    if (repo.alerts(userId).length >= LIMITS[plan].alerts) {
+      return reply.status(402).send({ error: plan === 'free' ? 'O plano grátis tem 1 alerta. Com o Pro, são ilimitados.' : 'Limite de alertas atingido.', upgrade: plan === 'free' });
+    }
     return reply.status(201).send({ alert: publicAlert(repo.createAlert(userId, body, clock())) });
   });
 

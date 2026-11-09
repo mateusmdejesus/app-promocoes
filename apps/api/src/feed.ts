@@ -1,19 +1,24 @@
-import { categoryAffinity, offerScore, personalScore, recentSearchTerms, STORE_NAMES, tokenize, type Category, type Tier } from '@keropromo/core';
+import { categoryAffinity, lockedUntil, offerScore, personalScore, recentSearchTerms, STORE_NAMES, tokenize, type Category, type Plan, type Tier } from '@keropromo/core';
 import type { OfferRow, Repo } from './repo';
 
 const DAY_MS = 86_400_000;
 
-/** O formato que o app recebe. Preços em centavos. */
+/**
+ * O formato que o app recebe. Preços em centavos.
+ * Oferta quente no plano grátis chega `locked`: sem preço e sem link até `unlocksAt`.
+ */
 export interface OfferDTO {
   id: string;
   title: string;
   category: Category;
   store: string;
   storeName: string;
-  url: string;
+  url: string | null;
   imageUrl: string | null;
-  price: number;
-  referencePrice: number;
+  price: number | null;
+  referencePrice: number | null;
+  locked: boolean;
+  unlocksAt: string | null;
   discountPct: number;
   tier: Tier;
   verified: boolean;
@@ -21,17 +26,20 @@ export interface OfferDTO {
   detectedAt: string;
 }
 
-export function toDTO(o: OfferRow): OfferDTO {
+export function toDTO(o: OfferRow, plan: Plan, now: Date): OfferDTO {
+  const until = lockedUntil(plan, o.analysis.tier, o.detectedAt, now);
   return {
+    locked: !!until,
+    unlocksAt: until?.toISOString() ?? null,
     id: o.product.id,
     title: o.product.title,
     category: o.product.category,
     store: o.product.store,
     storeName: STORE_NAMES[o.product.store],
-    url: o.product.url,
+    url: until ? null : o.product.url,
     imageUrl: o.product.imageUrl ?? null,
-    price: o.analysis.price,
-    referencePrice: o.analysis.referencePrice,
+    price: until ? null : o.analysis.price,
+    referencePrice: until ? null : o.analysis.referencePrice,
     discountPct: o.analysis.discountPct,
     tier: o.analysis.tier,
     verified: o.analysis.verified,
@@ -46,15 +54,15 @@ function scored(repo: Repo, offers: OfferRow[], now: Date) {
 }
 
 /** "Quentes agora": as melhores ofertas de 40% ou mais, iguais para todos. */
-export function hotOffers(repo: Repo, now: Date, limit = 10): OfferDTO[] {
+export function hotOffers(repo: Repo, plan: Plan, now: Date, limit = 10): OfferDTO[] {
   return scored(repo, repo.activeOffers({ tier: 'hot' }), now)
     .sort((a, b) => b.base - a.base)
     .slice(0, limit)
-    .map((x) => toDTO(x.o));
+    .map((x) => toDTO(x.o, plan, now));
 }
 
 /** "Pra você": todas as promoções, ordenadas pelo gosto do usuário. */
-export function personalFeed(repo: Repo, userId: string, now: Date, opts: { category?: Category; limit?: number } = {}): OfferDTO[] {
+export function personalFeed(repo: Repo, userId: string, plan: Plan, now: Date, opts: { category?: Category; limit?: number } = {}): OfferDTO[] {
   const events = repo.events(userId, new Date(now.getTime() - 90 * DAY_MS));
   const affinity = categoryAffinity(repo.categories(userId), events, now);
   const terms = recentSearchTerms(events, now);
@@ -62,10 +70,10 @@ export function personalFeed(repo: Repo, userId: string, now: Date, opts: { cate
     .map((x) => ({ o: x.o, s: personalScore(x.base, x.o.product.category, x.o.product.title, affinity, terms) }))
     .sort((a, b) => b.s - a.s)
     .slice(0, opts.limit ?? 50)
-    .map((x) => toDTO(x.o));
+    .map((x) => toDTO(x.o, plan, now));
 }
 
-export function search(repo: Repo, query: string, now: Date): OfferDTO[] {
+export function search(repo: Repo, query: string, plan: Plan, now: Date): OfferDTO[] {
   const want = tokenize(query);
   if (want.length === 0) return [];
   const hits = repo.activeOffers().filter((o) => {
@@ -75,5 +83,5 @@ export function search(repo: Repo, query: string, now: Date): OfferDTO[] {
   });
   return scored(repo, hits, now)
     .sort((a, b) => b.base - a.base)
-    .map((x) => toDTO(x.o));
+    .map((x) => toDTO(x.o, plan, now));
 }

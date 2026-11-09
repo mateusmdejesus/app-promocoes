@@ -4,3 +4,4 @@ export * from './ranking';
 export * from './personalization';
 export * from './alerts';
 export * from './notifications';
+export * from './plans';

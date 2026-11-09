@@ -8,6 +8,11 @@ export const config = {
   monitorIntervalMin: Number(process.env.MONITOR_INTERVAL_MIN ?? 5),
   stores: (process.env.STORES ?? 'demo').split(',').map((s) => s.trim()).filter(Boolean),
   mlAccessToken: process.env.ML_ACCESS_TOKEN ?? '',
+  appleBundleId: process.env.APPLE_BUNDLE_ID ?? '',
+  resendApiKey: process.env.RESEND_API_KEY ?? '',
+  emailFrom: process.env.EMAIL_FROM ?? 'keropromo <acesso@keropromo.app>',
+  revenuecatWebhookAuth: process.env.REVENUECAT_WEBHOOK_AUTH ?? '',
+  allowDevPurchases: process.env.ALLOW_DEV_PURCHASES === '1',
 };
 
 export function buildAdapters(): StoreAdapter[] {
