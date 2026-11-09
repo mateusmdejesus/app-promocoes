@@ -10,14 +10,16 @@ import type { ListingSnapshot, StoreAdapter } from './types';
  * O cadastro de afiliado é só a chave de acesso aos dados: o link é o da loja.
  */
 const SEARCHES: Array<{ q: string; category: Category }> = [
+  // Termos específicos: "geladeira" sozinho traz brinquedo e peça (conferido na API real).
   { q: 'smart tv', category: 'eletro' },
-  { q: 'geladeira', category: 'eletro' },
-  { q: 'máquina de lavar', category: 'eletro' },
+  { q: 'geladeira frost free', category: 'eletro' },
+  { q: 'geladeira duplex', category: 'eletro' },
+  { q: 'lavadora de roupas', category: 'eletro' },
+  { q: 'fogão 4 bocas', category: 'eletro' },
   { q: 'micro-ondas', category: 'eletro' },
-  { q: 'fogão', category: 'eletro' },
   { q: 'ar condicionado', category: 'eletro' },
-  { q: 'aspirador', category: 'eletro' },
-  { q: 'air fryer', category: 'casa' },
+  { q: 'aspirador de pó', category: 'eletro' },
+  { q: 'fritadeira air fryer', category: 'casa' },
   { q: 'liquidificador', category: 'casa' },
   { q: 'cafeteira', category: 'casa' },
   { q: 'panela', category: 'casa' },
