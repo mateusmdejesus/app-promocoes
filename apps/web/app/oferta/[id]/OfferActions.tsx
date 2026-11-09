@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { LockIcon } from '../../../components/Brand';
 import { useSession } from '../../../components/Session';
 import { api, brl, type Offer } from '../../../lib/api';
@@ -14,14 +14,21 @@ import s from './oferta.module.css';
 export function OfferActions({ id, publicLocked, storeName, url }: { id: string; publicLocked: boolean; storeName: string; url: string | null }) {
   const { me, ready } = useSession();
   const [unlocked, setUnlocked] = useState<Offer | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  const unlock = useCallback(() => {
+    setFailed(false);
+    api
+      .offerForMe(id)
+      .then((r) => (r.offer.locked || !r.offer.url ? setFailed(true) : setUnlocked(r.offer)))
+      .catch(() => setFailed(true));
+  }, [id]);
 
   useEffect(() => {
     if (!me) return;
     api.event('view', id).catch(() => undefined);
-    if (publicLocked && me.plan === 'pro') {
-      api.offer(id).then((r) => (r.offer.locked ? null : setUnlocked(r.offer))).catch(() => undefined);
-    }
-  }, [me, id, publicLocked]);
+    if (publicLocked && me.plan === 'pro') unlock();
+  }, [me, id, publicLocked, unlock]);
 
   const link = unlocked?.url ?? url;
   const goButton = (href: string) => (
@@ -48,7 +55,17 @@ export function OfferActions({ id, publicLocked, storeName, url }: { id: string;
   }
 
   // Visitante ou plano grátis (ou Pro ainda carregando).
-  if (ready && me?.plan === 'pro') return <span className="muted">Liberando a oferta…</span>;
+  if (ready && me?.plan === 'pro') {
+    if (!failed) return <span className="muted">Liberando a oferta…</span>;
+    return (
+      <>
+        <span className="muted">Não conseguimos liberar esta oferta agora.</span>
+        <button type="button" className="btn btn-primary btn-lg" style={{ marginTop: 8 }} onClick={unlock}>
+          Tentar de novo
+        </button>
+      </>
+    );
+  }
   return (
     <>
       <div className={`${s.locked} dark`}>

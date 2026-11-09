@@ -29,6 +29,12 @@ export default async function Landing() {
 
   return (
     <>
+      {/* Quem já entrou vai direto para a vitrine, sem ver a landing (roda antes de desenhar a página). */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `try{if(localStorage.getItem('keropromo.token'))location.replace('/ofertas')}catch(e){}`,
+        }}
+      />
       <section className={`${s.hero} dark`}>
         <div className={`container ${s.heroGrid}`}>
           <div className={s.heroCopy}>

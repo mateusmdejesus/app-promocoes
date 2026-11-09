@@ -71,6 +71,13 @@ export async function call<T>(method: string, path: string, body?: unknown, init
 export const api = {
   hot: (revalidate?: number) => call<{ offers: Offer[] }>('GET', '/v1/offers/hot', undefined, { revalidate }),
   feed: () => call<{ offers: Offer[] }>('GET', '/v1/feed'),
+  /** Versão da oferta para quem está logado, buscada pelo próprio site (ver app/api/o). */
+  offerForMe: async (id: string) => {
+    const t = token.get();
+    const res = await fetch(`/api/o/${encodeURIComponent(id)}`, { headers: t ? { Authorization: `Bearer ${t}` } : {}, cache: 'no-store' });
+    if (!res.ok) throw new ApiError(res.status, 'Algo deu errado. Tente de novo.');
+    return (await res.json()) as { offer: Offer };
+  },
   offer: (id: string, revalidate?: number) =>
     call<{ offer: Offer; historyDays: number; history: Array<{ day: string; price: number }> }>('GET', `/v1/offers/${encodeURIComponent(id)}`, undefined, { revalidate }),
   me: () => call<Me>('GET', '/v1/me'),
