@@ -120,9 +120,12 @@ export class MercadoLivreAdapter implements StoreAdapter {
     const itemIds: string[] = [];
     let productErrors = 0;
     let productSample = '';
+    let rawProduct = '';
+    let rawPrices = '';
     for (const id of ids.filter((x) => !asItem.has(x) && !x.startsWith('MLBU')).slice(0, MAX_PRODUCTS)) {
       try {
         const res = await this.get<unknown>(`/products/${id}/items`);
+        rawProduct ||= JSON.stringify(res).slice(0, 300);
         const list = (Array.isArray(res) ? res : ((res as { results?: unknown[] }).results ?? [])) as Array<{ item_id?: string; id?: string }>;
         for (const x of list.slice(0, 3)) {
           const iid = x.item_id ?? x.id;
@@ -141,6 +144,7 @@ export class MercadoLivreAdapter implements StoreAdapter {
       const rows = await this.get<Array<{ code: number; body: MlItem }>>(
         `/items?ids=${batch.join(',')}&attributes=id,title,price,original_price,permalink,thumbnail,status`,
       );
+      rawPrices ||= JSON.stringify(rows).slice(0, 300);
       for (const r of rows) {
         if (r.code === 200 && r.body && r.body.status !== 'paused' && r.body.price) {
           out.push(this.fromItem(r.body, cat.category));
@@ -150,7 +154,7 @@ export class MercadoLivreAdapter implements StoreAdapter {
 
     if (out.length === 0) {
       const types = [...new Set(content.map((c) => c.type))].join(',') || 'nenhum';
-      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; falhas em /products/items: ${productErrors}${productSample ? ` ex.: ${productSample}` : ''})`);
+      throw new Error(`destaques ${cat.id}: 0 produtos (${content.length} itens, tipos: ${types}; falhas em /products/items: ${productErrors}${productSample ? ` ex.: ${productSample}` : ''}; anúncios achados: ${uniq.length}; /products/items: ${rawProduct || '-'}; /items: ${rawPrices || '-'})`);
     }
     return out;
   }
