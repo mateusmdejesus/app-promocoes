@@ -124,6 +124,22 @@ export function openDb(path: string): DB {
       send_after INTEGER NOT NULL
     );
     CREATE INDEX IF NOT EXISTS pending_pushes_due ON pending_pushes (send_after);
+
+    -- Cobranças Pix do Pro (mensal ou anual). Cada pagamento aprovado estende o acesso.
+    CREATE TABLE IF NOT EXISTS pix_charges (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      period TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      provider TEXT NOT NULL,
+      provider_id TEXT NOT NULL UNIQUE,
+      qr_code TEXT NOT NULL,
+      status TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      paid_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS pix_charges_user ON pix_charges (user_id, created_at);
   `);
 
   // Colunas adicionadas depois da primeira versão (bancos antigos não as têm).

@@ -13,6 +13,9 @@ export const config = {
   emailFrom: process.env.EMAIL_FROM ?? 'keropromo <acesso@keropromo.app>',
   revenuecatWebhookAuth: process.env.REVENUECAT_WEBHOOK_AUTH ?? '',
   allowDevPurchases: process.env.ALLOW_DEV_PURCHASES === '1',
+  mpAccessToken: process.env.MP_ACCESS_TOKEN ?? '',
+  publicUrl: process.env.PUBLIC_URL ?? '',
+  webOrigins: (process.env.WEB_ORIGINS ?? 'http://localhost:3000').split(',').map((s) => s.trim()).filter(Boolean),
 };
 
 export function buildAdapters(): StoreAdapter[] {

@@ -1,4 +1,5 @@
 import { AppleJwtVerifier, LogEmailSender, ResendEmailSender } from './auth';
+import { DevPix, MercadoPagoPix } from './billing';
 import { buildAdapters, config } from './config';
 import { openDb } from './db';
 import { runMonitor } from './monitor';
@@ -30,6 +31,10 @@ const app = buildServer(repo, {
   apple: config.appleBundleId ? new AppleJwtVerifier(config.appleBundleId) : undefined,
   revenuecatAuth: config.revenuecatWebhookAuth || undefined,
   allowDevPurchases: config.allowDevPurchases,
+  // Sem token do Mercado Pago, Pix só em modo de teste (e só se ALLOW_DEV_PURCHASES=1).
+  pix: config.mpAccessToken ? new MercadoPagoPix(config.mpAccessToken) : config.allowDevPurchases ? new DevPix() : undefined,
+  publicUrl: config.publicUrl || undefined,
+  webOrigins: config.webOrigins,
 });
 if (!config.resendApiKey) console.log('[auth] RESEND_API_KEY vazio: os códigos de login aparecem aqui no terminal.');
 await app.listen({ port: config.port, host: '0.0.0.0' });

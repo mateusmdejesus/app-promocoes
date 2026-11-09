@@ -1,8 +1,10 @@
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
+import cors from '@fastify/cors';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { CATEGORIES, LIMITS, planFor, PRICES, type Plan } from '@keropromo/core';
 import { z } from 'zod';
 import { normalizeEmail, type AppleVerifier, type EmailSender } from './auth';
+import type { DevPix, PixProvider } from './billing';
 import { hotOffers, personalFeed, search, toDTO } from './feed';
 import type { Repo } from './repo';
 
@@ -28,7 +30,16 @@ export interface ServerDeps {
   revenuecatAuth?: string;
   /** Libera /v1/dev/grant-pro para testar o Pro antes de existir loja. Nunca em produção. */
   allowDevPurchases?: boolean;
+  /** Pix (Mercado Pago, ou o modo de teste). */
+  pix?: PixProvider;
+  /** Endereço público da API, para o Mercado Pago avisar pagamentos. */
+  publicUrl?: string;
+  /** Sites que podem chamar a API pelo navegador (ex.: https://keropromo.com.br). */
+  webOrigins?: string[];
 }
+
+const PLAN_DAYS = { monthly: 30, yearly: 365 } as const;
+const PIX_TTL_MIN = 30;
 
 /** Eventos do RevenueCat que estendem o acesso até `expiration_at_ms`. */
 const GRANTING_EVENTS = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE', 'UNCANCELLATION', 'NON_RENEWING_PURCHASE', 'SUBSCRIPTION_EXTENDED', 'TEMPORARY_ENTITLEMENT_GRANT']);
@@ -36,6 +47,7 @@ const GRANTING_EVENTS = new Set(['INITIAL_PURCHASE', 'RENEWAL', 'PRODUCT_CHANGE'
 export function buildServer(repo: Repo, deps: ServerDeps) {
   const clock = deps.clock ?? (() => new Date());
   const app = Fastify({ logger: false });
+  if (deps.webOrigins?.length) app.register(cors, { origin: deps.webOrigins, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] });
 
   app.setErrorHandler((err: Error, _req, reply) => {
     if (err instanceof z.ZodError) return reply.status(400).send({ error: 'invalid_request', issues: err.issues });
@@ -199,6 +211,85 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
     const { period } = z.object({ period: z.enum(['monthly', 'yearly']) }).parse(req.body);
     repo.setProUntil(userId, new Date(clock().getTime() + (period === 'yearly' ? 365 : 30) * DAY_MS));
     return { plan: 'pro' };
+  });
+
+  // ---------- Pix (site) ----------
+
+  const chargeDTO = (c: { id: string; period: string; amount: number; qrCode: string; status: string; expiresAt: Date }, now: Date) => ({
+    id: c.id,
+    period: c.period,
+    amount: c.amount,
+    qrCode: c.qrCode,
+    status: c.status === 'pending' && c.expiresAt.getTime() < now.getTime() ? 'expired' : c.status,
+    expiresAt: c.expiresAt.toISOString(),
+    test: deps.pix?.name === 'dev',
+  });
+
+  /** Consulta o provedor e libera o Pro se o Pix foi pago. Usado pelo webhook e pela consulta do site. */
+  const syncCharge = async (id: string) => {
+    const c = repo.pixCharge(id);
+    if (!c || !deps.pix || c.status === 'approved') return c;
+    const status = await deps.pix.getStatus(c.providerId);
+    if (status === 'approved') repo.markPixPaid(c.id, clock(), PLAN_DAYS[c.period]);
+    else if (status !== 'pending') repo.setPixStatus(c.id, status);
+    return repo.pixCharge(id);
+  };
+
+  app.post('/v1/billing/pix', async (req, reply) => {
+    if (!deps.pix) throw fail(503, 'Pagamento por Pix ainda não está configurado.');
+    const userId = userOf(req);
+    const acc = repo.account(userId)!;
+    if (!acc.email && !acc.hasApple) throw fail(400, 'Crie sua conta antes de assinar.');
+    const { period } = z.object({ period: z.enum(['monthly', 'yearly']) }).parse(req.body);
+    const now = clock();
+    const id = randomUUID();
+    const expiresAt = new Date(now.getTime() + PIX_TTL_MIN * 60_000);
+    const created = await deps.pix
+      .createPix({
+        amountCents: PRICES[period],
+        description: period === 'yearly' ? 'keropromo Pro anual' : 'keropromo Pro mensal',
+        payerEmail: acc.email ?? `${userId}@usuarios.keropromo.com.br`,
+        externalRef: id,
+        expiresAt,
+        notificationUrl: deps.publicUrl ? `${deps.publicUrl}/v1/webhooks/mercadopago` : undefined,
+      })
+      .catch((e: Error) => {
+        throw fail(502, e.message);
+      });
+    const charge = { id, userId, period, amount: PRICES[period], provider: deps.pix.name, providerId: created.providerId, qrCode: created.qrCode, status: 'pending', expiresAt, createdAt: now };
+    repo.savePixCharge(charge);
+    return reply.status(201).send({ charge: chargeDTO(charge, now) });
+  });
+
+  app.get('/v1/billing/pix/:id', async (req, reply) => {
+    const userId = userOf(req);
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    const c = repo.pixCharge(id);
+    if (!c || c.userId !== userId) return reply.status(404).send({ error: 'not_found' });
+    const fresh = await syncCharge(id).catch(() => c);
+    return { charge: chargeDTO(fresh ?? c, clock()), plan: planOf(userId) };
+  });
+
+  // O Mercado Pago avisa aqui; a gente confirma consultando o pagamento direto na API dele.
+  app.post('/v1/webhooks/mercadopago', async (req, reply) => {
+    const q = req.query as Record<string, string | undefined>;
+    const body = (req.body ?? {}) as { type?: string; data?: { id?: string | number } };
+    const providerId = String(body.data?.id ?? q['data.id'] ?? q.id ?? '');
+    const c = providerId ? repo.pixChargeByProviderId(providerId) : undefined;
+    if (c) await syncCharge(c.id).catch(() => undefined);
+    return reply.status(200).send({ ok: true });
+  });
+
+  // Modo de teste: "paga" um Pix de teste.
+  app.post('/v1/dev/pix/:id/pay', async (req, reply) => {
+    if (!deps.allowDevPurchases || deps.pix?.name !== 'dev') return reply.status(404).send({ error: 'not_found' });
+    const userId = userOf(req);
+    const { id } = z.object({ id: z.string() }).parse(req.params);
+    const c = repo.pixCharge(id);
+    if (!c || c.userId !== userId) return reply.status(404).send({ error: 'not_found' });
+    (deps.pix as DevPix).paid.add(c.providerId);
+    await syncCharge(id);
+    return { plan: planOf(userId) };
   });
 
   // ---------- ofertas ----------

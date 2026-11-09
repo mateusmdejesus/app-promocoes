@@ -7,11 +7,13 @@ import { LogPushSender } from '../src/push';
 import { Repo } from '../src/repo';
 import { buildServer } from '../src/server';
 import { LogEmailSender, type AppleVerifier } from '../src/auth';
+import { DevPix } from '../src/billing';
 
 let email: LogEmailSender;
 /** Apple de mentira: o "token" é o próprio sub; "bad" é rejeitado. */
 const fakeApple: AppleVerifier = { verify: async (t) => { if (t.startsWith('bad')) throw new Error('x'); const [sub, mail] = t.split('|'); return { sub: sub!, email: mail }; } };
-const serverAt = (now?: Date) => buildServer(repo, { clock: now ? () => now : undefined, email, apple: fakeApple, revenuecatAuth: 'rc-secret', allowDevPurchases: true });
+let pix: DevPix;
+const serverAt = (now?: Date) => buildServer(repo, { clock: now ? () => now : undefined, email, apple: fakeApple, revenuecatAuth: 'rc-secret', allowDevPurchases: true, pix });
 
 const DAY = 86_400_000;
 const T0 = new Date('2026-09-01T15:00:00Z').getTime();
@@ -42,6 +44,7 @@ beforeEach(() => {
   store = new FakeStore();
   sender = new LogPushSender();
   email = new LogEmailSender();
+  pix = new DevPix();
   store.set('af', 'Air Fryer 4L Digital', 'casa', 51900);
   store.set('fone', 'Fone Bluetooth Over-ear', 'eletronicos', 28900);
   store.set('tenis', 'Tênis de Corrida', 'esporte', 40000, 64000);
@@ -248,6 +251,51 @@ describe('assinatura', () => {
       { id: 'yearly', price: 11900, perMonth: 992 },
       { id: 'monthly', price: 1490, perMonth: 1490 },
     ]);
+  });
+});
+
+describe('Pix no site', () => {
+  async function signedUser(app: ReturnType<typeof serverAt>, mail: string) {
+    await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: mail } });
+    const s = (await app.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: mail, code: email.last.get(mail) } })).json();
+    return { authorization: `Bearer ${s.token}` };
+  }
+
+  it('cobra, libera o Pro quando pago e não soma dias duas vezes', async () => {
+    const now = new Date(T0);
+    const app = serverAt(now);
+    const headers = await signedUser(app, 'pix@x.com');
+
+    const created = await app.inject({ method: 'POST', url: '/v1/billing/pix', headers, payload: { period: 'monthly' } });
+    expect(created.statusCode).toBe(201);
+    const charge = created.json().charge;
+    expect(charge).toMatchObject({ amount: 1490, status: 'pending', test: true });
+    expect(charge.qrCode).toContain('14.90');
+
+    const pending = (await app.inject({ method: 'GET', url: `/v1/billing/pix/${charge.id}`, headers })).json();
+    expect(pending).toMatchObject({ plan: 'free', charge: { status: 'pending' } });
+
+    expect((await app.inject({ method: 'POST', url: `/v1/dev/pix/${charge.id}/pay`, headers })).json().plan).toBe('pro');
+    // Consultar de novo (como faz o site) não soma mais 30 dias.
+    await app.inject({ method: 'GET', url: `/v1/billing/pix/${charge.id}`, headers });
+    const me = (await app.inject({ method: 'GET', url: '/v1/me', headers })).json();
+    expect(new Date(me.proUntil).getTime()).toBe(T0 + 30 * DAY);
+
+    // Renovar antes de vencer soma a partir do fim do período atual.
+    const second = (await app.inject({ method: 'POST', url: '/v1/billing/pix', headers, payload: { period: 'yearly' } })).json().charge;
+    await app.inject({ method: 'POST', url: `/v1/dev/pix/${second.id}/pay`, headers });
+    const me2 = (await app.inject({ method: 'GET', url: '/v1/me', headers })).json();
+    expect(new Date(me2.proUntil).getTime()).toBe(T0 + (30 + 365) * DAY);
+  });
+
+  it('exige conta identificada e não mostra cobrança de outra pessoa', async () => {
+    const app = serverAt(new Date(T0));
+    const anon = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
+    expect((await app.inject({ method: 'POST', url: '/v1/billing/pix', headers: { authorization: `Bearer ${anon.secret}` }, payload: { period: 'monthly' } })).statusCode).toBe(400);
+    const a = await signedUser(app, 'a@x.com');
+    const b = await signedUser(serverAt(new Date(T0 + 60_000)), 'b@x.com');
+    const charge = (await app.inject({ method: 'POST', url: '/v1/billing/pix', headers: a, payload: { period: 'monthly' } })).json().charge;
+    expect((await app.inject({ method: 'GET', url: `/v1/billing/pix/${charge.id}`, headers: b })).statusCode).toBe(404);
   });
 });
 

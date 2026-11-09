@@ -173,6 +173,42 @@ export class Repo {
     this.db.prepare('DELETE FROM users WHERE id = ?').run(userId);
   }
 
+  // ---------- cobranças Pix ----------
+
+  savePixCharge(c: PixCharge): void {
+    this.db
+      .prepare('INSERT INTO pix_charges (id, user_id, period, amount, provider, provider_id, qr_code, status, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(c.id, c.userId, c.period, c.amount, c.provider, c.providerId, c.qrCode, c.status, c.expiresAt.getTime(), c.createdAt.getTime());
+  }
+
+  pixCharge(id: string): PixCharge | undefined {
+    const r = this.db.prepare('SELECT * FROM pix_charges WHERE id = ?').get(id) as Row | undefined;
+    return r ? toCharge(r) : undefined;
+  }
+
+  pixChargeByProviderId(providerId: string): PixCharge | undefined {
+    const r = this.db.prepare('SELECT * FROM pix_charges WHERE provider_id = ?').get(providerId) as Row | undefined;
+    return r ? toCharge(r) : undefined;
+  }
+
+  /**
+   * Marca como paga e estende o Pro a partir do fim do período atual (ou de agora).
+   * Só uma vez por cobrança: chamadas repetidas (webhook + consulta) não somam dias.
+   */
+  markPixPaid(id: string, now: Date, days: number): boolean {
+    const changed = n(this.db.prepare("UPDATE pix_charges SET status = 'approved', paid_at = ? WHERE id = ? AND status != 'approved'").run(now.getTime(), id).changes) > 0;
+    if (!changed) return false;
+    const c = this.pixCharge(id)!;
+    const current = this.account(c.userId)?.proUntil;
+    const base = current && current.getTime() > now.getTime() ? current.getTime() : now.getTime();
+    this.setProUntil(c.userId, new Date(base + days * 86_400_000));
+    return true;
+  }
+
+  setPixStatus(id: string, status: string): void {
+    this.db.prepare("UPDATE pix_charges SET status = ? WHERE id = ? AND status != 'approved'").run(status, id);
+  }
+
   // ---------- código por e-mail ----------
 
   saveEmailCode(email: string, code: string, now: Date, ttlMin = 10): void {
@@ -297,6 +333,36 @@ export class Repo {
     const r = this.db.prepare('SELECT push_token FROM users WHERE id = ?').get(userId) as Row | undefined;
     return r?.push_token == null ? undefined : String(r.push_token);
   }
+}
+
+export interface PixCharge {
+  id: string;
+  userId: string;
+  period: 'monthly' | 'yearly';
+  amount: number;
+  provider: string;
+  providerId: string;
+  qrCode: string;
+  status: string;
+  expiresAt: Date;
+  createdAt: Date;
+  paidAt?: Date;
+}
+
+function toCharge(r: Row): PixCharge {
+  return {
+    id: String(r.id),
+    userId: String(r.user_id),
+    period: r.period as PixCharge['period'],
+    amount: n(r.amount),
+    provider: String(r.provider),
+    providerId: String(r.provider_id),
+    qrCode: String(r.qr_code),
+    status: String(r.status),
+    expiresAt: new Date(n(r.expires_at)),
+    createdAt: new Date(n(r.created_at)),
+    paidAt: r.paid_at == null ? undefined : new Date(n(r.paid_at)),
+  };
 }
 
 const OFFER_SELECT = `SELECT o.*, p.store, p.external_id, p.title, p.category, p.url, p.image_url
