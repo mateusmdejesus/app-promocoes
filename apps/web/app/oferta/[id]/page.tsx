@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const o = data.offer;
   return {
     title: `${o.title}: histórico de preço e desconto real`,
-    description: `${o.title} com ${o.discountPct}% de desconto no ${o.storeName}, comparado ao preço dos últimos 90 dias.`,
+    description: `${o.title} com ${o.discountPct}% de desconto no ${o.storeName}, com o histórico de preço do produto.`,
   };
 }
 

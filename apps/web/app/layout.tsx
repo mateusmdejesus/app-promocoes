@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { default: 'keropromo — promoção de verdade, na hora que ela aparece', template: '%s · keropromo' },
   description:
-    'Vigiamos Mercado Livre e Amazon a cada 5 minutos e mostramos só desconto real, comparado ao preço dos últimos 90 dias. Avisos no Telegram.',
+    'Vigiamos Mercado Livre, Shopee e mais de 20 lojas a cada 5 minutos e guardamos o histórico de cada preço, para você pegar a promoção de verdade.',
   openGraph: { siteName: 'keropromo', locale: 'pt_BR', type: 'website' },
 };
 

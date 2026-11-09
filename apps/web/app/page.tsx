@@ -12,11 +12,11 @@ const PER_DAY = brl(Math.round(PRICES.monthly / 30));
 const SAVING = Math.round((1 - PRICES.yearly / (PRICES.monthly * 12)) * 100);
 
 const FAQ = [
-  ['Como vocês sabem que o desconto é de verdade?', 'Guardamos o preço de cada produto várias vezes por dia. O desconto que mostramos é contra o preço normal dos últimos 90 dias, não contra o "de" que a loja anuncia. Se a loja subiu o preço antes de "baixar", a gente percebe e não mostra.'],
-  ['Quais lojas vocês acompanham?', 'Mercado Livre e Amazon, as maiores do Brasil. Outras entram em breve.'],
+  ['Como vocês sabem que o desconto é de verdade?', 'Guardamos o preço de cada produto a cada vez que olhamos a loja, o dia todo. Com esse histórico, dá para ver o preço que o produto costuma ter, e não só o "de" que a loja anuncia. Na página de cada oferta você vê o gráfico do preço.'],
+  ['Quais lojas vocês acompanham?', 'Mercado Livre, Shopee e mais de 20 lojas parceiras, como Magazine Mateus, Friopeças, Candide e NutriBullet. Outras entram em breve.'],
   ['Como pago? Tem cobrança automática?', 'No Pix, sem cobrança automática: o mensal vale 30 dias e o anual 12 meses. Antes de vencer, mandamos o Pix do próximo período. Se não pagar, você volta para o plano grátis, sem multa.'],
-  ['O que muda no plano grátis?', 'Você vê todas as promoções de 25% ou mais. As ofertas quentes (40% ou mais) aparecem para você 1 hora depois de surgirem, e você tem 1 alerta de produto.'],
-  ['Como recebo os avisos?', 'Pelo Telegram, na hora, e por e-mail. Você escolhe as categorias e cria alertas como "air fryer até R$ 300".'],
+  ['O que muda no plano grátis?', 'Você vê todas as promoções de 25% ou mais. As ofertas quentes (40% ou mais) aparecem para você 1 hora depois de surgirem, e o histórico de preço mostra 7 dias.'],
+  ['Vocês mandam aviso de oferta?', 'Em breve. Os avisos por e-mail e Telegram e os alertas de produto (tipo "air fryer até R$ 300") estão chegando, primeiro para quem é Pro. Por enquanto, as ofertas ficam na vitrine do site, atualizada a cada 5 minutos.'],
   ['Vocês ganham comissão das lojas?', 'Não. O keropromo é pago por quem assina. Por isso a gente só mostra o que é bom para você, não o que paga mais comissão.'],
 ];
 
@@ -39,14 +39,14 @@ export default async function Landing() {
         <div className={`container ${s.heroGrid}`}>
           <div className={s.heroCopy}>
             <Link href="/#como-funciona" className={s.announce}>
-              <span className={s.announceNew}>Novo</span> Avisos de oferta no Telegram
+              <span className={s.announceNew}>Novo</span> Mercado Livre, Shopee e mais de 20 lojas
               <span aria-hidden="true">→</span>
             </Link>
             <h1 className={`display ${s.title}`}>
               Promoção <span className={s.underline}>de verdade</span>, na hora que ela aparece.
             </h1>
             <p className={s.lead}>
-              Vigiamos Mercado Livre e Amazon a cada 5 minutos e te avisamos quando o preço cai <strong>de verdade</strong>: comparado ao preço dos últimos 90 dias, não ao &quot;de&quot; que a loja inventa.
+              Vigiamos Mercado Livre, Shopee e mais de 20 lojas a cada 5 minutos e guardamos o histórico de cada preço, para você pegar a promoção <strong>de verdade</strong>, não o &quot;de&quot; que a loja inventa.
             </p>
             <div className={s.ctas}>
               <Link href="/pro" className="btn btn-signal btn-lg">
@@ -59,7 +59,7 @@ export default async function Landing() {
             <p className={s.fine}>Pix, sem cobrança automática. Cancele quando quiser.</p>
           </div>
 
-          <div className={s.receipt} aria-label="Exemplo: air fryer de 519 reais por 249 reais, menor preço em 90 dias">
+          <div className={s.receipt} aria-label="Exemplo: air fryer de 519 reais por 249 reais, menor preço que já vimos">
             <span className={s.product}>Air fryer 4L digital · Mercado Livre</span>
             <span className={s.old}>
               R$ 519
@@ -68,7 +68,7 @@ export default async function Landing() {
             <span className={`price ${s.new}`}>R$ 249</span>
             <span className={s.fact}>
               <span className={s.dot} />
-              Menor preço dos últimos 90 dias
+              Menor preço que já vimos
             </span>
           </div>
         </div>
@@ -119,12 +119,12 @@ export default async function Landing() {
           <li className="card">
             <span className={s.stepN}>1</span>
             <h3 className="h3">Vigiamos as lojas</h3>
-            <p className="muted">Mercado Livre e Amazon, a cada 5 minutos, o dia todo. Cada preço fica guardado no histórico do produto.</p>
+            <p className="muted">Mercado Livre, Shopee e mais de 20 lojas, a cada 5 minutos, o dia todo. Cada preço fica guardado no histórico do produto.</p>
           </li>
           <li className="card">
             <span className={s.stepN}>2</span>
             <h3 className="h3">Conferimos o desconto</h3>
-            <p className="muted">Comparamos com o preço normal dos últimos 90 dias. A loja subiu o preço na véspera para &quot;dar 50%&quot;? Não passa.</p>
+            <p className="muted">Com o histórico, dá para ver o preço que o produto costuma ter. A loja subiu o preço na véspera para &quot;dar 50%&quot;? O gráfico mostra.</p>
             <div className={s.example} aria-hidden="true">
               <span>
                 Loja diz <span className="strike">R$ 200</span> → R$ 100 <span className={s.lie}>−50%</span>
@@ -136,8 +136,8 @@ export default async function Landing() {
           </li>
           <li className="card">
             <span className={s.stepN}>3</span>
-            <h3 className="h3">Te avisamos na hora</h3>
-            <p className="muted">No Telegram e por e-mail, só nas categorias que você escolheu e nos alertas que você criou. No máximo 5 por dia.</p>
+            <h3 className="h3">Você pega na hora</h3>
+            <p className="muted">Quem é Pro vê as ofertas quentes assim que aparecem. Avisos por e-mail e Telegram chegam em breve.</p>
           </li>
         </ol>
       </section>
@@ -165,8 +165,7 @@ export default async function Landing() {
             <ul className={s.features}>
               <li><CheckIcon /> <span>Promoções de 25% ou mais</span></li>
               <li><CheckIcon /> <span>Ofertas quentes 1 hora depois</span></li>
-              <li><CheckIcon /> <span>1 alerta de produto</span></li>
-              <li><CheckIcon /> <span>Histórico de 7 dias</span></li>
+              <li><CheckIcon /> <span>Histórico de preço de 7 dias</span></li>
             </ul>
             <Link href="/ofertas" className="btn btn-soft btn-block">
               Começar grátis
@@ -184,9 +183,9 @@ export default async function Landing() {
             </p>
             <ul className={s.features}>
               <li><CheckIcon /> <span>Ofertas quentes <strong>na hora</strong></span></li>
-              <li><CheckIcon /> <span>Aviso no Telegram e e-mail</span></li>
-              <li><CheckIcon /> <span>Alertas ilimitados</span></li>
-              <li><CheckIcon /> <span>Histórico de 90 dias</span></li>
+              <li><CheckIcon /> <span>Preço e link de todas as quentes</span></li>
+              <li><CheckIcon /> <span>Histórico de preço de até 90 dias</span></li>
+              <li><CheckIcon /> <span>Em breve: avisos por e-mail e Telegram</span></li>
             </ul>
             <Link href="/pro" className="btn btn-signal btn-block btn-lg">
               Assinar o Pro

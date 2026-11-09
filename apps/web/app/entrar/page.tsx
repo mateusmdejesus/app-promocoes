@@ -26,9 +26,9 @@ export default function Entrar() {
             Com a conta grátis você:
           </p>
           <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 17 }}>
-            <li>vê promoções de 25% ou mais, com desconto real;</li>
+            <li>vê promoções de 25% ou mais de Mercado Livre, Shopee e mais de 20 lojas;</li>
             <li>ordena tudo pelo que você curte;</li>
-            <li>cria 1 alerta, tipo &quot;air fryer até R$ 300&quot;.</li>
+            <li>vê o histórico de preço de cada produto.</li>
           </ul>
           <p style={{ margin: 0 }}>
             Quer as ofertas quentes na hora? Depois de entrar, é um clique para o <strong style={{ color: 'var(--paper)' }}>Pro</strong>.

@@ -15,9 +15,9 @@ const SAVING = Math.round((1 - PRICES.yearly / (PRICES.monthly * 12)) * 100);
 
 const ROWS: Array<[string, string, string]> = [
   ['Ofertas quentes (40%+)', '1 h depois', 'Na hora'],
-  ['Aviso no Telegram e e-mail', '—', 'Na hora'],
-  ['Alertas de produto', '1', 'Ilimitados'],
-  ['Histórico de preço', '7 dias', '90 dias'],
+  ['Preço e link das quentes', '1 h depois', 'Sempre'],
+  ['Histórico de preço', '7 dias', 'Até 90 dias'],
+  ['Avisos por e-mail e Telegram', '—', 'Em breve'],
 ];
 
 /** Compra do Pro em três etapas (Conta → Pagamento → Pronto), com Pix. */

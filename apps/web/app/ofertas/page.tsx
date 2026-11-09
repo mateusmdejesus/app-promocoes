@@ -116,7 +116,7 @@ export default function Ofertas() {
         <p className="muted" style={{ margin: "8px 0 20px" }}>
           {tab === "casa"
             ? "TV, geladeira, máquina de lavar, fogão e cozinha com 40% ou mais de desconto."
-            : "40% ou mais abaixo do preço normal dos últimos 90 dias."}
+            : "40% ou mais de desconto, atualizadas a cada 5 minutos."}
         </p>
         {error ? (
           <p role="alert">
@@ -210,8 +210,7 @@ export default function Ofertas() {
           <Link href="/entrar" className="link" style={{ color: "var(--ink)" }}>
             Crie sua conta grátis
           </Link>{" "}
-          para ver todas as promoções, ordenadas pelo que você curte, e criar um
-          alerta.
+          para ver todas as promoções, ordenadas pelo que você curte.
         </p>
       )}
     </div>
