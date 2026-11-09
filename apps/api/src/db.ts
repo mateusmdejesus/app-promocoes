@@ -1,4 +1,6 @@
+import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import type { DatabaseSync as DatabaseSyncT } from 'node:sqlite';
 
 // Carregado via require: o Vite (usado nos testes) ainda não reconhece o módulo node:sqlite.
@@ -12,6 +14,7 @@ const { DatabaseSync } = createRequire(import.meta.url)('node:sqlite') as typeof
 export type DB = DatabaseSyncT;
 
 export function openDb(path: string): DB {
+  if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
   db.exec(`
     PRAGMA journal_mode = WAL;

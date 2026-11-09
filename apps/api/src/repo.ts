@@ -37,6 +37,10 @@ export class Repo {
     return { id, store, externalId: s.externalId, title: s.title, category: s.category, url: s.url, imageUrl: s.imageUrl };
   }
 
+  productCount(): number {
+    return n((this.db.prepare('SELECT COUNT(*) AS c FROM products').get() as Row).c);
+  }
+
   lastPricePoint(productId: string): PricePoint | undefined {
     const r = this.db.prepare('SELECT price, list_price, at FROM price_points WHERE product_id = ? ORDER BY at DESC LIMIT 1').get(productId) as Row | undefined;
     return r ? toPoint(r) : undefined;

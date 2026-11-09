@@ -4,6 +4,7 @@ import { openDb } from './db';
 import { runMonitor } from './monitor';
 import { ExpoPushSender } from './push';
 import { Repo } from './repo';
+import { seedDemoHistory } from './seedDemo';
 import { buildServer } from './server';
 
 const repo = new Repo(openDb(config.databasePath));
@@ -33,5 +34,10 @@ const app = buildServer(repo, {
 if (!config.resendApiKey) console.log('[auth] RESEND_API_KEY vazio: os códigos de login aparecem aqui no terminal.');
 await app.listen({ port: config.port, host: '0.0.0.0' });
 console.log(`keropromo API em http://localhost:${config.port}`);
+// Banco novo com a loja de exemplo ligada: gera histórico para o app não abrir vazio.
+if (config.stores.includes('demo') && repo.productCount() === 0) {
+  console.log('[seed] banco vazio: gerando 60 dias de histórico da loja de exemplo...');
+  console.log(`[seed] pronto: ${await seedDemoHistory(repo)} ofertas ativas.`);
+}
 await tick();
 setInterval(tick, config.monitorIntervalMin * 60_000);

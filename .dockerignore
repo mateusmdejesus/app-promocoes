@@ -1,0 +1,10 @@
+**/node_modules
+**/*.db*
+.git
+.agents
+.claude
+docs
+apps/mobile/*
+!apps/mobile/package.json
+apps/api/test
+packages/core/test
