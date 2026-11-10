@@ -70,6 +70,31 @@ export interface BrowseResult {
   facets: { stores: Array<{ name: string; count: number }>; categories: Array<{ category: Category; count: number }> };
 }
 
+export type PostSlot = '12h' | '19h';
+export type PostFormat = 'achado' | 'gica';
+export type PostStatus = 'ideia' | 'roteiro' | 'gravado' | 'postado';
+
+/** Post do cronograma do Estúdio. */
+export interface Post {
+  id: string;
+  date: string;
+  slot: PostSlot;
+  format: PostFormat;
+  theme: string | null;
+  title: string;
+  hook: string | null;
+  script: string | null;
+  caption: string | null;
+  hashtags: string | null;
+  filming: string | null;
+  productId: string | null;
+  status: PostStatus;
+  notes: string | null;
+  updatedAt: string;
+}
+
+export type Deal = Offer & { pageUrl: string; lowest90: number | null; historyDays: number };
+
 export interface Me {
   userId: string;
   email: string | null;
@@ -150,6 +175,11 @@ export const api = {
   offer: (id: string, revalidate?: number) =>
     call<{ offer: Offer; historyDays: number; history: Array<{ day: string; price: number }> }>('GET', `/v1/offers/${encodeURIComponent(id)}`, undefined, { revalidate }),
   me: () => call<Me>('GET', '/v1/me'),
+  adminMe: () => call<{ admin: true }>('GET', '/v1/admin/me'),
+  adminPosts: (from: string, to: string) => call<{ posts: Post[] }>('GET', `/v1/admin/posts?from=${from}&to=${to}`),
+  savePost: (date: string, slot: PostSlot, body: Partial<Omit<Post, 'id' | 'date' | 'slot' | 'updatedAt'>>) =>
+    call<{ post: Post }>('PUT', `/v1/admin/posts/${date}/${slot}`, body),
+  adminDeals: (limit = 8) => call<{ deals: Deal[] }>('GET', `/v1/admin/deals?limit=${limit}`),
   browse: (f: BrowseFilters) => {
     const p = new URLSearchParams();
     if (f.q) p.set('q', f.q);

@@ -5,6 +5,7 @@ import type { Metadata, Viewport } from 'next';
 import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
 import { MobileNav } from '../components/MobileNav';
+import { HideOnStudio } from '../components/HideOnStudio';
 import { SessionProvider } from '../components/Session';
 import { SITE_URL } from '../lib/api';
 
@@ -23,10 +24,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body>
         <SessionProvider>
-          <Header />
+          <HideOnStudio>
+            <Header />
+          </HideOnStudio>
           <main>{children}</main>
-          <Footer />
-          <MobileNav />
+          <HideOnStudio>
+            <Footer />
+            <MobileNav />
+          </HideOnStudio>
         </SessionProvider>
       </body>
     </html>
