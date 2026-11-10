@@ -160,3 +160,45 @@
   .tCell { border-left: 0; border-top: 1px solid var(--st-line); }
   .fieldsRow { grid-template-columns: 1fr; }
 }
+
+/* Instagram */
+.igAccount { display: flex; align-items: center; gap: 14px; }
+.avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; border: 2px solid var(--st-line); }
+.notice { margin: 0; padding: 12px 14px; border-radius: 12px; border: 1px solid #4a3a22; background: #221a10; color: #f5d9a8; font-size: 13px; }
+.chart { display: flex; align-items: flex-end; gap: 8px; height: 220px; padding-top: 18px; }
+.barCol { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; text-decoration: none; color: inherit; }
+.barFill { width: 100%; max-width: 44px; border-radius: 8px 8px 3px 3px; background: repeating-linear-gradient(135deg, var(--st-signal) 0 6px, #ff7a47 6px 9px); }
+.barCol:hover .barFill { filter: brightness(1.15); }
+.barVal { font-size: 11px; color: var(--st-muted); font-variant-numeric: tabular-nums; }
+.barLabel { font-size: 11px; color: var(--st-faint); }
+.miniSelect { background: var(--st-raised); border: 1px solid var(--st-line); color: var(--st-text); border-radius: 9px; padding: 6px 10px; font: inherit; font-size: 13px; }
+.igTable { display: flex; flex-direction: column; overflow-x: auto; }
+.igRow { display: grid; grid-template-columns: minmax(260px, 2.6fr) repeat(7, minmax(72px, 1fr)); gap: 10px; align-items: center; padding: 10px 6px; border-top: 1px solid var(--st-line); text-decoration: none; color: inherit; font-variant-numeric: tabular-nums; min-width: 820px; }
+.igRow:hover { background: var(--st-raised); }
+.igHead { border-top: 0; color: var(--st-faint); font-size: 12px; }
+.igHead:hover { background: none; }
+.igPost { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.igThumb { width: 44px; height: 56px; border-radius: 8px; overflow: hidden; background: var(--st-raised); flex-shrink: 0; }
+.igThumb img { width: 100%; height: 100%; object-fit: cover; }
+.igCaption { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.igCaption strong { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Comentários */
+.commentsGrid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.postPick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.postPickItem { width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px; border-radius: 12px; border: 1px solid var(--st-line); background: var(--st-surface); color: inherit; font: inherit; cursor: pointer; }
+.postPickItem[aria-current='true'] { border-color: var(--st-signal); background: var(--st-raised); }
+.thread { list-style: none; margin: 0; display: flex; flex-direction: column; gap: 0; padding: 6px 18px; }
+.comment { padding: 14px 0; border-top: 1px solid var(--st-line); display: flex; flex-direction: column; gap: 6px; }
+.comment:first-child { border-top: 0; }
+.comment p { margin: 0; line-height: 1.5; }
+.commentTop { display: flex; gap: 10px; align-items: baseline; }
+.reply { margin-left: 14px; padding-left: 12px; border-left: 2px solid var(--st-line); color: var(--st-muted); font-size: 13px; }
+.replyForm { display: flex; gap: 8px; }
+.replyForm input { flex: 1; min-width: 0; background: var(--st-raised); border: 1px solid var(--st-line); border-radius: 10px; color: var(--st-text); font: inherit; padding: 8px 12px; }
+.igMini { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 10px; }
+.igMini strong { display: block; font-family: var(--font-display); font-size: 22px; font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) {
+  .commentsGrid { grid-template-columns: minmax(0, 1fr); }
+}
+.comment .linkBtn { align-self: flex-start; }

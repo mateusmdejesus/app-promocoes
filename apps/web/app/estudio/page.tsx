@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from '../../components/Session';
-import { api, ApiError, brl, type Deal, type Post, type PostSlot, type PostStatus } from '../../lib/api';
+import { api, ApiError, brl, type Deal, type IgOverview, type Post, type PostSlot, type PostStatus } from '../../lib/api';
+import { CommentsView, InstagramView, useInstagram } from './Instagram';
 import s from './estudio.module.css';
 
 /** Campanha de Black Friday: 11 a 30 de novembro, 2 posts por dia. */
@@ -34,7 +35,7 @@ const campaignDays = () => {
   return out;
 };
 
-type View = 'overview' | 'calendar' | 'deals';
+type View = 'overview' | 'calendar' | 'deals' | 'instagram' | 'comments';
 
 export default function Estudio() {
   const { me, ready } = useSession();
@@ -66,6 +67,7 @@ export default function Estudio() {
   }, [allowed, load]);
 
   const byId = useMemo(() => new Map(posts.map((p) => [p.id, p])), [posts]);
+  const ig = useInstagram();
 
   if (allowed === null) return <div className={s.shell} />;
   if (!allowed) {
@@ -113,12 +115,16 @@ export default function Estudio() {
             </button>
           ))}
           <span className={s.navLabel}>Redes</span>
-          <span className={`${s.navItem} ${s.soon}`}>
-            Instagram <em>em breve</em>
-          </span>
-          <span className={`${s.navItem} ${s.soon}`}>
-            Comentários <em>em breve</em>
-          </span>
+          {(
+            [
+              ['instagram', 'Instagram'],
+              ['comments', 'Comentários'],
+            ] as Array<[View, string]>
+          ).map(([v, label]) => (
+            <button key={v} type="button" className={s.navItem} aria-current={view === v ? 'page' : undefined} onClick={() => setView(v)}>
+              {label}
+            </button>
+          ))}
           <span className={`${s.navItem} ${s.soon}`}>
             TikTok <em>em breve</em>
           </span>
@@ -130,9 +136,13 @@ export default function Estudio() {
 
       <main className={s.main}>
         {view === 'overview' ? (
-          <Overview posts={posts} byId={byId} deals={deals} onOpen={setEditing} onSeeAll={() => setView('calendar')} onSeeDeals={() => setView('deals')} name={(me?.email?.split('@')[0] ?? '').replace(/^./, (c) => c.toUpperCase())} />
+          <Overview ig={ig.data} onSeeInstagram={() => setView('instagram')} posts={posts} byId={byId} deals={deals} onOpen={setEditing} onSeeAll={() => setView('calendar')} onSeeDeals={() => setView('deals')} name={(me?.email?.split('@')[0] ?? '').replace(/^./, (c) => c.toUpperCase())} />
         ) : view === 'calendar' ? (
           <Calendar byId={byId} onOpen={setEditing} />
+        ) : view === 'instagram' ? (
+          <InstagramView ig={ig} />
+        ) : view === 'comments' ? (
+          <CommentsView ig={ig} />
         ) : (
           <Deals deals={deals} />
         )}
@@ -144,6 +154,8 @@ export default function Estudio() {
 }
 
 function Overview({
+  ig,
+  onSeeInstagram,
   posts,
   byId,
   deals,
@@ -152,6 +164,8 @@ function Overview({
   onSeeDeals,
   name,
 }: {
+  ig: IgOverview | null;
+  onSeeInstagram: () => void;
   posts: Post[];
   byId: Map<string, Post>;
   deals: Deal[] | null;
@@ -285,10 +299,33 @@ function Overview({
 
       <section className={`${s.card} ${s.connect}`}>
         <div>
-          <h2>Instagram</h2>
-          <p className={s.muted}>Conecte sua conta de Criador para ver visualizações, salvamentos, comentários e publicar os Reels daqui.</p>
+          <h2>Instagram {ig ? `· @${ig.account.username}` : ''}</h2>
+          {ig ? (
+            <div className={s.igMini}>
+              <span>
+                <strong>{ig.account.followers.toLocaleString('pt-BR')}</strong>
+                <span className={s.muted}>seguidores</span>
+              </span>
+              <span>
+                <strong>{ig.totals.views?.toLocaleString('pt-BR') ?? '—'}</strong>
+                <span className={s.muted}>visualizações ({ig.totals.posts} posts)</span>
+              </span>
+              <span>
+                <strong>{ig.totals.saved?.toLocaleString('pt-BR') ?? '—'}</strong>
+                <span className={s.muted}>salvamentos</span>
+              </span>
+              <span>
+                <strong>{ig.totals.comments.toLocaleString('pt-BR')}</strong>
+                <span className={s.muted}>comentários</span>
+              </span>
+            </div>
+          ) : (
+            <p className={s.muted}>Carregando a conta…</p>
+          )}
         </div>
-        <span className={s.soonTag}>em breve</span>
+        <button type="button" className={s.ghost} onClick={onSeeInstagram}>
+          Ver tudo
+        </button>
       </section>
     </>
   );

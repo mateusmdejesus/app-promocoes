@@ -165,8 +165,10 @@ export class InstagramClient {
         }>(`${this.userId}/media`, {
           params: { fields: 'id,caption,media_type,media_product_type,timestamp,permalink,thumbnail_url,media_url,like_count,comments_count', limit: String(limit) },
         });
+        // Números de todos os posts ao mesmo tempo (um pedido por post).
+        const insights = await Promise.all(r.data.map((m) => this.insights(m.id)));
         const out: IgMedia[] = [];
-        for (const m of r.data) {
+        for (const [i, m] of r.data.entries()) {
           out.push({
             id: m.id,
             caption: m.caption ?? '',
@@ -177,7 +179,7 @@ export class InstagramClient {
             thumbnailUrl: m.thumbnail_url ?? (m.media_type === 'VIDEO' ? undefined : m.media_url),
             likes: m.like_count ?? 0,
             comments: m.comments_count ?? 0,
-            insights: await this.insights(m.id),
+            insights: insights[i] ?? null,
           });
         }
         return out;

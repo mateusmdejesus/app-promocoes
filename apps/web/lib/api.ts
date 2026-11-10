@@ -95,6 +95,40 @@ export interface Post {
 
 export type Deal = Offer & { pageUrl: string; lowest90: number | null; historyDays: number };
 
+export interface IgInsights {
+  views?: number;
+  reach?: number;
+  saved?: number;
+  shares?: number;
+  totalInteractions?: number;
+}
+export interface IgMedia {
+  id: string;
+  caption: string;
+  type: string;
+  productType: string;
+  timestamp: string;
+  permalink: string;
+  thumbnailUrl?: string;
+  likes: number;
+  comments: number;
+  insights: IgInsights | null;
+}
+export interface IgOverview {
+  account: { id: string; username: string; name?: string; followers: number; follows: number; mediaCount: number; pictureUrl?: string };
+  media: IgMedia[];
+  insightsAvailable: boolean;
+  totals: { posts: number; likes: number; comments: number; views: number | null; reach: number | null; saved: number | null; shares: number | null };
+}
+export interface IgComment {
+  id: string;
+  text: string;
+  username: string;
+  timestamp: string;
+  likes: number;
+  replies: Array<{ id: string; text: string; username: string; timestamp: string }>;
+}
+
 export interface Me {
   userId: string;
   email: string | null;
@@ -179,6 +213,9 @@ export const api = {
   adminPosts: (from: string, to: string) => call<{ posts: Post[] }>('GET', `/v1/admin/posts?from=${from}&to=${to}`),
   savePost: (date: string, slot: PostSlot, body: Partial<Omit<Post, 'id' | 'date' | 'slot' | 'updatedAt'>>) =>
     call<{ post: Post }>('PUT', `/v1/admin/posts/${date}/${slot}`, body),
+  instagram: (fresh = false) => call<IgOverview>('GET', `/v1/admin/instagram?limit=24${fresh ? '&fresh=1' : ''}`),
+  igComments: (mediaId: string, fresh = false) => call<{ comments: IgComment[] }>('GET', `/v1/admin/instagram/media/${mediaId}/comments${fresh ? '?fresh=1' : ''}`),
+  igReply: (commentId: string, message: string) => call<{ id: string }>('POST', `/v1/admin/instagram/comments/${commentId}/reply`, { message }),
   adminDeals: (limit = 8) => call<{ deals: Deal[] }>('GET', `/v1/admin/deals?limit=${limit}`),
   browse: (f: BrowseFilters) => {
     const p = new URLSearchParams();
