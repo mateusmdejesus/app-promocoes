@@ -5,6 +5,7 @@ import { openDb } from './db';
 import { runMonitor } from './monitor';
 import { ExpoPushSender } from './push';
 import { notifyWatches } from './watches';
+import { InstagramClient } from './instagram';
 import { Repo } from './repo';
 import { seedDemoHistory } from './seedDemo';
 import { buildServer } from './server';
@@ -44,7 +45,9 @@ const app = buildServer(repo, {
   adminEmails: config.adminEmails,
   adminApiKey: config.adminApiKey || undefined,
   siteUrl: config.siteUrl,
+  instagram: config.igAccessToken && config.igUserId ? new InstagramClient(config.igAccessToken, config.igUserId) : undefined,
 });
+console.log(`[instagram] ${config.igAccessToken && config.igUserId ? `conectado (conta ${config.igUserId})` : 'desligado (falta IG_ACCESS_TOKEN ou IG_USER_ID)'}`);
 console.log(`[pix] ${config.mpAccessToken ? `Mercado Pago, chave ${describeSecret(config.mpAccessToken)}` : config.allowDevPurchases ? 'modo de teste' : 'desligado (sem MP_ACCESS_TOKEN)'}`);
 if (!config.resendApiKey) console.log('[auth] RESEND_API_KEY vazio: os códigos de login aparecem aqui no terminal.');
 await app.listen({ port: config.port, host: '0.0.0.0' });

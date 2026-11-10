@@ -7,6 +7,7 @@ import { normalizeEmail, type AppleVerifier, type EmailSender } from './auth';
 import type { DevPix, PixProvider } from './billing';
 import { browse, hotOffers, personalFeed, search, searchProducts, toDTO, type OfferDTO } from './feed';
 import { MAX_WATCHES, targetLimit, watchList } from './watches';
+import type { InstagramClient } from './instagram';
 import { POST_FORMATS, POST_SLOTS, POST_STATUSES, type Repo } from './repo';
 
 const DAY_MS = 86_400_000;
@@ -42,6 +43,8 @@ export interface ServerDeps {
   adminApiKey?: string;
   /** Site, para links de produto no Estúdio. */
   siteUrl?: string;
+  /** Instagram da conta de Criador, para o Estúdio. */
+  instagram?: InstagramClient;
 }
 
 const PLAN_DAYS = { monthly: 30, yearly: 365 } as const;
@@ -479,6 +482,53 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
         };
       });
     return { deals };
+  });
+
+  // ---------- Estúdio: Instagram ----------
+
+  const ig = () => {
+    if (!deps.instagram) throw fail(503, 'Instagram não conectado: falta IG_ACCESS_TOKEN e IG_USER_ID no servidor.');
+    return deps.instagram;
+  };
+  const igFail = (e: unknown) => fail(502, (e as Error).message);
+
+  /** Conta + últimos posts com curtidas, comentários e números (se a Meta liberar). */
+  app.get('/v1/admin/instagram', async (req) => {
+    requireAdmin(req);
+    const { fresh, limit } = z.object({ fresh: z.coerce.boolean().optional(), limit: z.coerce.number().int().min(1).max(50).optional() }).parse(req.query);
+    const client = ig();
+    const [account, media] = await Promise.all([client.account(fresh), client.media(limit ?? 24, fresh)]).catch((e) => {
+      throw igFail(e);
+    });
+    const sum = (f: (m: (typeof media)[number]) => number | undefined) => media.reduce((t, m) => t + (f(m) ?? 0), 0);
+    return {
+      account,
+      media,
+      insightsAvailable: client.insightsAllowed === true,
+      totals: {
+        posts: media.length,
+        likes: sum((m) => m.likes),
+        comments: sum((m) => m.comments),
+        views: client.insightsAllowed ? sum((m) => m.insights?.views) : null,
+        reach: client.insightsAllowed ? sum((m) => m.insights?.reach) : null,
+        saved: client.insightsAllowed ? sum((m) => m.insights?.saved) : null,
+        shares: client.insightsAllowed ? sum((m) => m.insights?.shares) : null,
+      },
+    };
+  });
+
+  app.get('/v1/admin/instagram/media/:id/comments', async (req) => {
+    requireAdmin(req);
+    const { id } = z.object({ id: z.string().regex(/^\d+$/) }).parse(req.params);
+    const { fresh } = z.object({ fresh: z.coerce.boolean().optional() }).parse(req.query);
+    return { comments: await ig().comments(id, fresh).catch((e) => Promise.reject(igFail(e))) };
+  });
+
+  app.post('/v1/admin/instagram/comments/:id/reply', async (req) => {
+    requireAdmin(req);
+    const { id } = z.object({ id: z.string().regex(/^\d+$/) }).parse(req.params);
+    const { message } = z.object({ message: z.string().trim().min(1).max(2200) }).parse(req.body);
+    return await ig().reply(id, message).catch((e) => Promise.reject(igFail(e)));
   });
 
   // ---------- vitrine com filtros ----------

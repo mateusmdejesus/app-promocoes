@@ -39,6 +39,9 @@ export const config = {
   adminEmails: (process.env.ADMIN_EMAILS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   /** Chave do agente da manhã (tarefa agendada) para escrever no Estúdio, no cabeçalho x-admin-key. */
   adminApiKey: cleanSecret(process.env.ADMIN_API_KEY),
+  /** Instagram da conta de Criador (Estúdio). */
+  igAccessToken: cleanSecret(process.env.IG_ACCESS_TOKEN),
+  igUserId: (process.env.IG_USER_ID ?? '').trim(),
   webOrigins: (process.env.WEB_ORIGINS ?? 'http://localhost:3000').split(',').map((s) => s.trim()).filter(Boolean),
 };
 
