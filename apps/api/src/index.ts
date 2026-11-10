@@ -33,6 +33,17 @@ async function tick() {
   }
 }
 
+// Instagram do Estúdio: o token de Página (que não vence) fica guardado no banco.
+const IG_KEY = 'ig_page_token';
+const instagram =
+  config.igAccessToken && config.igUserId
+    ? new InstagramClient(config.igAccessToken, config.igUserId, fetch, 5 * 60_000, {
+        get: () => (db.prepare('SELECT v FROM kv WHERE k = ?').get(IG_KEY) as { v: string } | undefined)?.v,
+        set: (t) => void db.prepare('INSERT INTO kv (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').run(IG_KEY, t),
+      })
+    : undefined;
+if (instagram) instagram.init().then((how) => console.log(`[instagram] usando ${how}`));
+
 const app = buildServer(repo, {
   email,
   apple: config.appleBundleId ? new AppleJwtVerifier(config.appleBundleId) : undefined,
@@ -45,7 +56,7 @@ const app = buildServer(repo, {
   adminEmails: config.adminEmails,
   adminApiKey: config.adminApiKey || undefined,
   siteUrl: config.siteUrl,
-  instagram: config.igAccessToken && config.igUserId ? new InstagramClient(config.igAccessToken, config.igUserId) : undefined,
+  instagram,
 });
 console.log(`[instagram] ${config.igAccessToken && config.igUserId ? `conectado (conta ${config.igUserId})` : 'desligado (falta IG_ACCESS_TOKEN ou IG_USER_ID)'}`);
 console.log(`[pix] ${config.mpAccessToken ? `Mercado Pago, chave ${describeSecret(config.mpAccessToken)}` : config.allowDevPurchases ? 'modo de teste' : 'desligado (sem MP_ACCESS_TOKEN)'}`);

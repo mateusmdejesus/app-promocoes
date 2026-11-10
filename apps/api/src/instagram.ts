@@ -63,8 +63,38 @@ export class InstagramClient {
     private userId: string,
     private fetchImpl: typeof fetch = fetch,
     private cacheMs = 5 * 60_000,
+    /** Onde guardar o token permanente da Página (sobrevive a reinícios e ao vencimento do token de 60 dias). */
+    private store?: { get(): string | undefined; set(token: string): void },
   ) {
     this.host = token.startsWith('IG') ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
+  }
+
+  /**
+   * Token de usuário do Facebook vence (1 h, ou 60 dias se estendido). O token da Página ligada ao
+   * Instagram, tirado de um token de 60 dias, não vence. Aqui trocamos um pelo outro e guardamos.
+   * Se não der (token já vencido, por exemplo), usamos o token de Página guardado antes.
+   */
+  async init(): Promise<string> {
+    if (this.host.includes('graph.instagram.com')) return 'token do Instagram (graph.instagram.com)';
+    try {
+      const r = await this.call<{ data: Array<{ id: string; name: string; access_token?: string; instagram_business_account?: { id: string } }> }>('me/accounts', {
+        params: { fields: 'id,name,access_token,instagram_business_account', limit: '100' },
+      });
+      const page = r.data.find((p) => p.instagram_business_account?.id === this.userId && p.access_token);
+      if (page?.access_token) {
+        this.token = page.access_token;
+        this.store?.set(page.access_token);
+        return `token da Página "${page.name}" (não vence)`;
+      }
+    } catch {
+      // Token de usuário vencido ou de usuário do sistema (que já não vence): segue abaixo.
+    }
+    const saved = this.store?.get();
+    if (saved && saved !== this.token) {
+      this.token = saved;
+      return 'token de Página guardado no banco';
+    }
+    return 'token configurado em IG_ACCESS_TOKEN';
   }
 
   private async call<T>(path: string, init: { method?: string; params?: Record<string, string> } = {}): Promise<T> {
