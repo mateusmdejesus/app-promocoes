@@ -16,7 +16,7 @@ const FAQ = [
   ['Quais lojas vocês acompanham?', 'Mercado Livre, Shopee e mais de 20 lojas parceiras, como Magazine Mateus, Friopeças, Candide e NutriBullet. Outras entram em breve.'],
   ['Como pago? Tem cobrança automática?', 'No Pix, sem cobrança automática: o mensal vale 30 dias e o anual 12 meses. Antes de vencer, mandamos o Pix do próximo período. Se não pagar, você volta para o plano grátis, sem multa.'],
   ['O que muda no plano grátis?', 'Você vê todas as promoções de 25% ou mais. As ofertas quentes (40% ou mais) aparecem para você 1 hora depois de surgirem, e o histórico de preço mostra 7 dias.'],
-  ['Vocês mandam aviso de oferta?', 'Em breve. Os avisos por e-mail e Telegram e os alertas de produto (tipo "air fryer até R$ 300") estão chegando, primeiro para quem é Pro. Por enquanto, as ofertas ficam na vitrine do site, atualizada a cada 5 minutos.'],
+  ['Como recebo os avisos?', 'Salve o produto que você quer em Vigiando e crie uma meta, tipo "essa air fryer por até R$ 300". Quando o preço chegar lá, você recebe um e-mail. No grátis dá para ter 1 meta; no Pro, quantas quiser. O robô no Telegram chega em breve.'],
   ['Vocês ganham comissão das lojas?', 'Não. O keropromo é pago por quem assina. Por isso a gente só mostra o que é bom para você, não o que paga mais comissão.'],
 ];
 
@@ -137,7 +137,7 @@ export default async function Landing() {
           <li className="card">
             <span className={s.stepN}>3</span>
             <h3 className="h3">Você pega na hora</h3>
-            <p className="muted">Quem é Pro vê as ofertas quentes assim que aparecem. Avisos por e-mail e Telegram chegam em breve.</p>
+            <p className="muted">Quem é Pro vê as ofertas quentes assim que aparecem. E qualquer um pode vigiar um produto e receber um e-mail quando ele chegar no preço que quer.</p>
           </li>
         </ol>
       </section>
@@ -165,6 +165,7 @@ export default async function Landing() {
             <ul className={s.features}>
               <li><CheckIcon /> <span>Promoções de 25% ou mais</span></li>
               <li><CheckIcon /> <span>Ofertas quentes 1 hora depois</span></li>
+              <li><CheckIcon /> <span>Vigiar produtos e 1 meta de preço</span></li>
               <li><CheckIcon /> <span>Histórico de preço de 7 dias</span></li>
             </ul>
             <Link href="/ofertas" className="btn btn-soft btn-block">
@@ -184,8 +185,9 @@ export default async function Landing() {
             <ul className={s.features}>
               <li><CheckIcon /> <span>Ofertas quentes <strong>na hora</strong></span></li>
               <li><CheckIcon /> <span>Preço e link de todas as quentes</span></li>
+              <li><CheckIcon /> <span>Metas de preço ilimitadas, com aviso por e-mail</span></li>
               <li><CheckIcon /> <span>Histórico de preço de até 90 dias</span></li>
-              <li><CheckIcon /> <span>Em breve: avisos por e-mail e Telegram</span></li>
+              <li><CheckIcon /> <span>Em breve: robô no Telegram</span></li>
             </ul>
             <Link href="/pro" className="btn btn-signal btn-block btn-lg">
               Assinar o Pro

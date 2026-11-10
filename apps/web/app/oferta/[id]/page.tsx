@@ -5,6 +5,7 @@ import { DiscountBadge } from '../../../components/OfferCard';
 import { api, brl, timeAgo } from '../../../lib/api';
 import { OfferActions } from './OfferActions';
 import { PriceChart } from './PriceChart';
+import { WatchBox } from './WatchBox';
 import s from './oferta.module.css';
 
 export const revalidate = 300;
@@ -30,6 +31,8 @@ export default async function OfertaPage({ params }: { params: Promise<{ id: str
   if (!data) notFound();
   const { offer: o, history, historyDays } = data;
   const open = !o.locked && o.price != null && o.referencePrice != null;
+  // Produto vigiado que não está em promoção agora: mostra só o preço de hoje.
+  const plain = !o.locked && o.price != null && o.referencePrice == null;
 
   return (
     <div className="container" style={{ paddingTop: 28 }}>
@@ -72,12 +75,32 @@ export default async function OfertaPage({ params }: { params: Promise<{ id: str
             </>
           ) : null}
 
-          <OfferActions id={o.id} publicLocked={!open} storeName={o.storeName} url={o.url} />
+          {plain ? (
+            <>
+              <div className={s.priceRow}>
+                <span className={`price ${s.price}`}>{brl(o.price!)}</span>
+              </div>
+              <span className="muted">Sem promoção agora. Vigie para saber quando o preço cair.</span>
+            </>
+          ) : null}
+
+          <OfferActions id={o.id} publicLocked={!open && !plain} storeName={o.storeName} url={o.url} />
+          <WatchBox id={o.id} price={o.price} />
           <span className="muted" style={{ fontSize: 13 }}>
             Preço pode mudar a qualquer momento; confira na loja.
           </span>
         </div>
       </div>
+
+      {plain && history.length > 1 ? (
+        <section className={`card ${s.history}`}>
+          <div className={s.historyHead}>
+            <h2 style={{ margin: 0, fontSize: 18 }}>Histórico de preço</h2>
+            <span className="muted">{historyDays} dias</span>
+          </div>
+          <PriceChart points={history} reference={Math.max(...history.map((h) => h.price))} hot={false} />
+        </section>
+      ) : null}
 
       {open && history.length > 1 ? (
         <section className={`card ${s.history}`}>

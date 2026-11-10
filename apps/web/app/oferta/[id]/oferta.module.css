@@ -1,6 +1,7 @@
 .crumbs { font-size: 14px; color: var(--ink-muted); display: flex; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crumbs a { color: inherit; }
-.top { display: grid; gap: 40px; margin-top: 24px; }
+.top { display: grid; grid-template-columns: minmax(0, 1fr); gap: 40px; margin-top: 24px; }
+.top > * { min-width: 0; }
 @media (min-width: 900px) { .top { grid-template-columns: minmax(0, 520px) minmax(0, 1fr); gap: 56px; } }
 .photo { aspect-ratio: 1; border-radius: var(--radius-big); background: var(--stone); overflow: hidden; }
 .photo img { width: 100%; height: 100%; object-fit: contain; }
@@ -23,3 +24,10 @@
 @media (max-width: 859px) {
   .buy { position: sticky; bottom: calc(84px + env(safe-area-inset-bottom)); z-index: 10; box-shadow: 0 10px 28px rgba(22, 19, 15, 0.22); }
 }
+/* Vigiar preço + meta */
+.watch { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.watchHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.watchForm { display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+.watchRow { display: flex; align-items: center; gap: 8px; }
+.watchPrefix { font-weight: 600; }
+.watchRow input { flex: 1 1 80px; width: 80px; min-width: 0; height: 44px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font: inherit; font-size: 16px; }

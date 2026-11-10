@@ -22,6 +22,53 @@ export interface Offer {
   detectedAt: string;
 }
 
+/** Produto na página "Vigiando". Preços em centavos. */
+export interface Watch {
+  id: string;
+  title: string;
+  category: Category;
+  storeName: string;
+  imageUrl: string | null;
+  url: string | null;
+  price: number | null;
+  lowestPrice: number | null;
+  targetPrice: number | null;
+  reached: boolean;
+  locked: boolean;
+  offer: { discountPct: number; tier: Tier } | null;
+  watchedAt: string;
+}
+
+export interface ProductHit {
+  id: string;
+  title: string;
+  storeName: string;
+  imageUrl: string | null;
+  price: number | null;
+  category: Category;
+  locked: boolean;
+  watching: boolean;
+}
+
+export type BrowseSort = 'relevance' | 'discount' | 'price_asc' | 'price_desc' | 'newest';
+
+export interface BrowseFilters {
+  q?: string;
+  stores?: string[];
+  categories?: Category[];
+  minPrice?: number;
+  maxPrice?: number;
+  minDiscount?: number;
+  sort?: BrowseSort;
+  limit?: number;
+}
+
+export interface BrowseResult {
+  offers: Offer[];
+  total: number;
+  facets: { stores: Array<{ name: string; count: number }>; categories: Array<{ category: Category; count: number }> };
+}
+
 export interface Me {
   userId: string;
   email: string | null;
@@ -97,11 +144,29 @@ export const api = {
     const t = token.get();
     const res = await fetch(`/api/o/${encodeURIComponent(id)}`, { headers: t ? { Authorization: `Bearer ${t}` } : {}, cache: 'no-store' });
     if (!res.ok) throw new ApiError(res.status, 'Algo deu errado. Tente de novo.');
-    return (await res.json()) as { offer: Offer };
+    return (await res.json()) as { offer: Offer; watching: { targetPrice: number | null } | null };
   },
   offer: (id: string, revalidate?: number) =>
     call<{ offer: Offer; historyDays: number; history: Array<{ day: string; price: number }> }>('GET', `/v1/offers/${encodeURIComponent(id)}`, undefined, { revalidate }),
   me: () => call<Me>('GET', '/v1/me'),
+  browse: (f: BrowseFilters) => {
+    const p = new URLSearchParams();
+    if (f.q) p.set('q', f.q);
+    if (f.stores?.length) p.set('stores', f.stores.join(','));
+    if (f.categories?.length) p.set('categories', f.categories.join(','));
+    if (f.minPrice != null) p.set('minPrice', String(f.minPrice));
+    if (f.maxPrice != null) p.set('maxPrice', String(f.maxPrice));
+    if (f.minDiscount) p.set('minDiscount', String(f.minDiscount));
+    if (f.sort) p.set('sort', f.sort);
+    p.set('limit', String(f.limit ?? 60));
+    return call<BrowseResult>('GET', `/v1/browse?${p}`);
+  },
+  watches: () => call<{ watches: Watch[]; limits: { targets: number } }>('GET', '/v1/watches'),
+  /** `targetPrice` em centavos; `null` tira a meta; sem o campo, só salva. */
+  saveWatch: (productId: string, targetPrice?: number | null) =>
+    call<void>('PUT', `/v1/watches/${encodeURIComponent(productId)}`, targetPrice === undefined ? {} : { targetPrice }),
+  deleteWatch: (productId: string) => call<void>('DELETE', `/v1/watches/${encodeURIComponent(productId)}`),
+  searchProducts: (q: string) => call<{ products: ProductHit[] }>('GET', `/v1/products/search?q=${encodeURIComponent(q)}`),
   startEmail: (email: string) => call<void>('POST', '/v1/auth/email/start', { email }),
   verifyEmail: (email: string, code: string) => call<{ userId: string; token: string; isNew: boolean }>('POST', '/v1/auth/email/verify', { email, code }),
   logout: () => call<void>('POST', '/v1/auth/logout'),

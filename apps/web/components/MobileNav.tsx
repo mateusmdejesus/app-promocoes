@@ -13,6 +13,7 @@ export function MobileNav() {
   const pro = me.plan === 'pro';
   const items = [
     { href: '/ofertas', label: 'Ofertas', active: path === '/ofertas' || path.startsWith('/oferta/'), icon: <path d="M3 7l2-4h14l2 4M3 7v13h18V7M3 7h18M9 11a3 3 0 006 0" /> },
+    { href: '/vigiando', label: 'Vigiando', active: path === '/vigiando', icon: <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 100-6 3 3 0 000 6z" /> },
     ...(pro ? [] : [{ href: '/pro', label: 'Seja Pro', active: path === '/pro', icon: <path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" /> }]),
     { href: '/conta', label: 'Minha conta', active: path === '/conta', icon: <path d="M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0" /> },
   ];

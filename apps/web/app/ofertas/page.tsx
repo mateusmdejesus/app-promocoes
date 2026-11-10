@@ -9,7 +9,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { OfferCard, OfferRow, OfferTile } from "../../components/OfferCard";
 import { useSession } from "../../components/Session";
-import { api, type Offer } from "../../lib/api";
+import { api, type BrowseResult, type Offer } from "../../lib/api";
+import { activeCount, FilterBar, type Filters } from "./Filters";
 import s from "./ofertas.module.css";
 
 /** Vitrine: as promoções do dia. Quem é grátis vê as quentes travadas e o Pro o tempo todo. */
@@ -40,35 +41,53 @@ export default function Ofertas() {
     );
   };
 
+  // Carrossel de quentes (igual para todos) e, para quem entrou, a lista com filtros.
+  const [filters, setFilters] = useState<Filters>({ sort: "relevance" });
+  const [facets, setFacets] = useState<BrowseResult["facets"] | null>(null);
+  const [total, setTotal] = useState(0);
+
   useEffect(() => {
     if (!ready || tab === null) return;
     setError(null);
     setHot(null);
-    setAll(null);
     const categories = tab === "casa" ? HOME_TAB_CATEGORIES : undefined;
     const hotQ = { limit: 40, categories };
-    Promise.all([
-      api.hot(undefined, hotQ),
-      me ? api.feed({ limit: 60, categories }) : api.hot(undefined, hotQ),
-    ])
-      .then(([h, f]) => {
+    api
+      .hot(undefined, hotQ)
+      .then((h) => {
         setHot(h.offers);
-        setAll(f.offers);
+        if (!me) setAll(h.offers);
       })
       .catch((e: Error) => setError(e.message));
   }, [ready, me, tab]);
 
+  useEffect(() => {
+    if (!ready || tab === null || !me) return;
+    const categories =
+      cat !== "all" ? [cat] : tab === "casa" ? [...HOME_TAB_CATEGORIES] : undefined;
+    const t = setTimeout(() => {
+      api
+        .browse({ ...filters, q: filters.q?.trim() || undefined, categories, limit: 80 })
+        .then((r) => {
+          setAll(r.offers);
+          setFacets(r.facets);
+          setTotal(r.total);
+        })
+        .catch((e: Error) => setError(e.message));
+    }, filters.q ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [ready, me, tab, cat, filters]);
+
   const pro = me?.plan === "pro";
   const lockedCount = (hot ?? []).filter((o) => o.locked).length;
   const cats = useMemo(
-    () => [...new Set((all ?? []).map((o) => o.category))],
-    [all],
+    () => (facets ? facets.categories.map((c) => c.category) : [...new Set((all ?? []).map((o) => o.category))]),
+    [all, facets],
   );
-  // As quentes ficam no carrossel de cima (deslizando para o lado, no celular e no computador).
-  const hotIds = new Set((hot ?? []).map((o) => o.id));
-  const list = (all ?? []).filter(
-    (o) => !hotIds.has(o.id) && (cat === "all" || o.category === cat),
-  );
+  // Sem busca nem filtro, as quentes ficam só no carrossel de cima; filtrando, aparecem na lista também.
+  const filtering = !!filters.q?.trim() || activeCount(filters) > 0 || (filters.sort ?? "relevance") !== "relevance";
+  const hotIds = new Set(filtering ? [] : (hot ?? []).map((o) => o.id));
+  const list = (all ?? []).filter((o) => !hotIds.has(o.id));
 
   return (
     <div className="container" style={{ paddingTop: 40 }}>
@@ -191,8 +210,16 @@ export default function Ofertas() {
               ))}
             </div>
           </div>
+          <FilterBar value={filters} onChange={setFilters} facets={facets} />
+          {filtering && all ? (
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {total} {total === 1 ? "promoção" : "promoções"}
+            </p>
+          ) : null}
           {all && list.length === 0 ? (
-            <p className="muted">Nada com 25% ou mais nessa categoria agora.</p>
+            <p className="muted">
+              {filtering ? "Nada com esses filtros agora. Tente tirar algum." : "Nada com 25% ou mais nessa categoria agora."}
+            </p>
           ) : null}
           <div className={`${s.rows} ${s.desktopOnly}`}>
             {list.map((o) => (

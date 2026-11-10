@@ -19,6 +19,7 @@ export function Header() {
         </Link>
         <nav className={styles.nav} aria-label="Principal">
           <Link href="/ofertas">Ofertas</Link>
+          {signedIn ? <Link href="/vigiando">Vigiando</Link> : null}
           {signedIn ? null : <Link href="/#como-funciona">Como funciona</Link>}
           {pro ? null : <Link href="/pro">Preços</Link>}
         </nav>

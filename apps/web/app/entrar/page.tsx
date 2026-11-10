@@ -28,7 +28,7 @@ export default function Entrar() {
           <ul style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 17 }}>
             <li>vê promoções de 25% ou mais de Mercado Livre, Shopee e mais de 20 lojas;</li>
             <li>ordena tudo pelo que você curte;</li>
-            <li>vê o histórico de preço de cada produto.</li>
+            <li>vigia os produtos que quer comprar e recebe um e-mail quando chegarem no seu preço.</li>
           </ul>
           <p style={{ margin: 0 }}>
             Quer as ofertas quentes na hora? Depois de entrar, é um clique para o <strong style={{ color: 'var(--paper)' }}>Pro</strong>.
