@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyRequest } from 'fastify';
 import { CATEGORIES, LIMITS, lockedUntil, planFor, PRICES, storeLabel, type Plan } from '@keropromo/core';
@@ -7,7 +7,7 @@ import { normalizeEmail, type AppleVerifier, type EmailSender } from './auth';
 import type { DevPix, PixProvider } from './billing';
 import { browse, hotOffers, personalFeed, search, searchProducts, toDTO, type OfferDTO } from './feed';
 import { MAX_WATCHES, targetLimit, watchList } from './watches';
-import type { Repo } from './repo';
+import { POST_FORMATS, POST_SLOTS, POST_STATUSES, type Repo } from './repo';
 
 const DAY_MS = 86_400_000;
 const category = z.enum(CATEGORIES);
@@ -37,6 +37,11 @@ export interface ServerDeps {
   publicUrl?: string;
   /** Sites que podem chamar a API pelo navegador (ex.: https://keropromo.com.br). */
   webOrigins?: string[];
+  /** Estúdio: e-mails de administrador e chave do agente (cabeçalho x-admin-key). */
+  adminEmails?: string[];
+  adminApiKey?: string;
+  /** Site, para links de produto no Estúdio. */
+  siteUrl?: string;
 }
 
 const PLAN_DAYS = { monthly: 30, yearly: 365 } as const;
@@ -367,6 +372,113 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
       history: dto.locked ? [] : repo.dailyLows(id, new Date(now.getTime() - days * DAY_MS)),
       watching: watch ? { targetPrice: watch.targetPrice ?? null } : null,
     };
+  });
+
+  // ---------- Estúdio (só administradores) ----------
+
+  const sameKey = (a: string, b: string) => {
+    const x = Buffer.from(a);
+    const y = Buffer.from(b);
+    return x.length === y.length && timingSafeEqual(x, y);
+  };
+  /** Administrador = e-mail em ADMIN_EMAILS logado, ou o agente com x-admin-key. */
+  const requireAdmin = (req: FastifyRequest) => {
+    const key = req.headers['x-admin-key'];
+    if (deps.adminApiKey && typeof key === 'string' && sameKey(key, deps.adminApiKey)) return;
+    const userId = optionalUser(req);
+    const email = userId ? repo.account(userId)?.email?.toLowerCase() : undefined;
+    if (!email || !(deps.adminEmails ?? []).includes(email)) throw fail(404, 'not_found');
+  };
+  const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+  app.get('/v1/admin/me', async (req) => {
+    requireAdmin(req);
+    return { admin: true };
+  });
+
+  app.get('/v1/admin/posts', async (req) => {
+    requireAdmin(req);
+    const q = z.object({ from: day, to: day }).parse(req.query);
+    return { posts: repo.posts(q.from, q.to) };
+  });
+
+  const postBody = z.object({
+    format: z.enum(POST_FORMATS).optional(),
+    theme: z.string().max(200).nullable().optional(),
+    title: z.string().min(1).max(200).optional(),
+    hook: z.string().max(600).nullable().optional(),
+    script: z.string().max(8000).nullable().optional(),
+    caption: z.string().max(3000).nullable().optional(),
+    hashtags: z.string().max(600).nullable().optional(),
+    filming: z.string().max(3000).nullable().optional(),
+    productId: z.string().max(200).nullable().optional(),
+    status: z.enum(POST_STATUSES).optional(),
+    notes: z.string().max(3000).nullable().optional(),
+  });
+
+  /** Cria ou atualiza o post de um dia e horário (o agente usa a mesma rota). */
+  app.put('/v1/admin/posts/:date/:slot', async (req) => {
+    requireAdmin(req);
+    const { date, slot } = z.object({ date: day, slot: z.enum(POST_SLOTS) }).parse(req.params);
+    const body = postBody.parse(req.body ?? {});
+    const id = `${date}/${slot}`;
+    const cur = repo.post(id);
+    if (!cur && (!body.title || !body.format)) throw fail(400, 'Post novo precisa de title e format.');
+    const pick = <K extends keyof typeof body>(k: K, fallback: unknown) => (body[k] === undefined ? fallback : body[k]);
+    return {
+      post: repo.upsertPost(
+        {
+          id,
+          date,
+          slot,
+          format: pick('format', cur?.format) as (typeof POST_FORMATS)[number],
+          theme: pick('theme', cur?.theme ?? null) as string | null,
+          title: pick('title', cur?.title) as string,
+          hook: pick('hook', cur?.hook ?? null) as string | null,
+          script: pick('script', cur?.script ?? null) as string | null,
+          caption: pick('caption', cur?.caption ?? null) as string | null,
+          hashtags: pick('hashtags', cur?.hashtags ?? null) as string | null,
+          filming: pick('filming', cur?.filming ?? null) as string | null,
+          productId: pick('productId', cur?.productId ?? null) as string | null,
+          status: pick('status', cur?.status ?? 'ideia') as (typeof POST_STATUSES)[number],
+          notes: pick('notes', cur?.notes ?? null) as string | null,
+        },
+        clock(),
+      ),
+    };
+  });
+
+  app.delete('/v1/admin/posts/:date/:slot', async (req, reply) => {
+    requireAdmin(req);
+    const { date, slot } = z.object({ date: day, slot: z.enum(POST_SLOTS) }).parse(req.params);
+    repo.deletePost(`${date}/${slot}`);
+    return reply.status(204).send();
+  });
+
+  /** Achados para os vídeos: maiores descontos agora, sem repetir produto das últimas 2 semanas. */
+  app.get('/v1/admin/deals', async (req) => {
+    requireAdmin(req);
+    const q = z.object({ limit: z.coerce.number().int().min(1).max(50).optional(), categories: z.string().optional() }).parse(req.query);
+    const now = clock();
+    const since = new Date(now.getTime() - 14 * DAY_MS).toISOString().slice(0, 10);
+    const used = repo.featuredProductsSince(since);
+    const cats = q.categories?.split(',').filter(Boolean);
+    const site = deps.siteUrl ?? 'https://keropromo.com.br';
+    const deals = repo
+      .activeOffers()
+      .filter((o) => !used.has(o.product.id) && (!cats || cats.includes(o.product.category)))
+      .sort((a, b) => b.analysis.discountPct - a.analysis.discountPct || b.detectedAt.getTime() - a.detectedAt.getTime())
+      .slice(0, q.limit ?? 12)
+      .map((o) => {
+        const lows = repo.dailyLows(o.product.id, new Date(now.getTime() - 90 * DAY_MS));
+        return {
+          ...toDTO(o, 'pro', now),
+          pageUrl: `${site}/oferta/${encodeURIComponent(o.product.id)}`,
+          lowest90: lows.length ? Math.min(...lows.map((l) => l.price)) : null,
+          historyDays: lows.length,
+        };
+      });
+    return { deals };
   });
 
   // ---------- vitrine com filtros ----------

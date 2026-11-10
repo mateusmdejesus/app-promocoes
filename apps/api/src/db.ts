@@ -138,6 +138,26 @@ export function openDb(path: string): DB {
     );
     CREATE INDEX IF NOT EXISTS watches_target ON watches (target_price);
 
+    -- Estúdio: cronograma de posts (2 por dia). id = "AAAA-MM-DD/12h" ou "/19h".
+    CREATE TABLE IF NOT EXISTS posts (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      slot TEXT NOT NULL,
+      format TEXT NOT NULL,
+      theme TEXT,
+      title TEXT NOT NULL,
+      hook TEXT,
+      script TEXT,
+      caption TEXT,
+      hashtags TEXT,
+      filming TEXT,
+      product_id TEXT,
+      status TEXT NOT NULL,
+      notes TEXT,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS posts_date ON posts (date);
+
     -- Pares chave/valor do servidor (ex.: refresh token do Mercado Livre).
     CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 

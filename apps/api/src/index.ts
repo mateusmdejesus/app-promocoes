@@ -41,6 +41,9 @@ const app = buildServer(repo, {
   pix: config.mpAccessToken ? new MercadoPagoPix(config.mpAccessToken) : config.allowDevPurchases ? new DevPix() : undefined,
   publicUrl: config.publicUrl || undefined,
   webOrigins: config.webOrigins,
+  adminEmails: config.adminEmails,
+  adminApiKey: config.adminApiKey || undefined,
+  siteUrl: config.siteUrl,
 });
 console.log(`[pix] ${config.mpAccessToken ? `Mercado Pago, chave ${describeSecret(config.mpAccessToken)}` : config.allowDevPurchases ? 'modo de teste' : 'desligado (sem MP_ACCESS_TOKEN)'}`);
 if (!config.resendApiKey) console.log('[auth] RESEND_API_KEY vazio: os códigos de login aparecem aqui no terminal.');

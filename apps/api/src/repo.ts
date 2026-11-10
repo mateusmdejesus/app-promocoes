@@ -24,6 +24,29 @@ export interface WatchRow {
   lowest90?: number;
 }
 
+export const POST_SLOTS = ['12h', '19h'] as const;
+export const POST_FORMATS = ['achado', 'gica'] as const;
+export const POST_STATUSES = ['ideia', 'roteiro', 'gravado', 'postado'] as const;
+
+/** Post do cronograma do Estúdio. */
+export interface Post {
+  id: string;
+  date: string;
+  slot: (typeof POST_SLOTS)[number];
+  format: (typeof POST_FORMATS)[number];
+  theme: string | null;
+  title: string;
+  hook: string | null;
+  script: string | null;
+  caption: string | null;
+  hashtags: string | null;
+  filming: string | null;
+  productId: string | null;
+  status: (typeof POST_STATUSES)[number];
+  notes: string | null;
+  updatedAt: string;
+}
+
 export interface Alert extends AlertRule {
   id: string;
   userId: string;
@@ -252,6 +275,41 @@ export class Repo {
   /** price = preço avisado; null = o preço voltou acima da meta (o próximo cruzamento avisa de novo). */
   setWatchNotified(userId: string, productId: string, price: number | null, now: Date): void {
     this.db.prepare('UPDATE watches SET notified_price = ?, notified_at = ? WHERE user_id = ? AND product_id = ?').run(price, price == null ? null : now.getTime(), userId, productId);
+  }
+
+  // ---------- Estúdio: cronograma de posts ----------
+
+  posts(from: string, to: string): Post[] {
+    return (this.db.prepare('SELECT * FROM posts WHERE date >= ? AND date <= ? ORDER BY date, slot').all(from, to) as Row[]).map(toPost);
+  }
+
+  post(id: string): Post | undefined {
+    const r = this.db.prepare('SELECT * FROM posts WHERE id = ?').get(id) as Row | undefined;
+    return r ? toPost(r) : undefined;
+  }
+
+  /** Cria ou atualiza; campos ausentes ficam como estavam. */
+  upsertPost(p: Omit<Post, 'updatedAt'>, now: Date): Post {
+    this.db
+      .prepare(
+        `INSERT INTO posts (id, date, slot, format, theme, title, hook, script, caption, hashtags, filming, product_id, status, notes, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET format = excluded.format, theme = excluded.theme, title = excluded.title, hook = excluded.hook,
+           script = excluded.script, caption = excluded.caption, hashtags = excluded.hashtags, filming = excluded.filming,
+           product_id = excluded.product_id, status = excluded.status, notes = excluded.notes, updated_at = excluded.updated_at`,
+      )
+      .run(p.id, p.date, p.slot, p.format, p.theme, p.title, p.hook, p.script, p.caption, p.hashtags, p.filming, p.productId, p.status, p.notes, now.getTime());
+    return this.post(p.id)!;
+  }
+
+  deletePost(id: string): boolean {
+    return n(this.db.prepare('DELETE FROM posts WHERE id = ?').run(id).changes) > 0;
+  }
+
+  /** Produtos já usados em "achado" desde a data (para o agente não repetir). */
+  featuredProductsSince(date: string): Set<string> {
+    const rows = this.db.prepare("SELECT product_id FROM posts WHERE product_id IS NOT NULL AND date >= ?").all(date) as Row[];
+    return new Set(rows.map((r) => String(r.product_id)));
   }
 
   /** Tira do ar as ofertas de lojas que saíram de STORES (o histórico de preço fica guardado). */
@@ -491,6 +549,27 @@ const OFFER_SELECT = `SELECT o.*, p.store, p.external_id, p.title, p.category, p
 
 function toPoint(r: Row): PricePoint {
   return { price: n(r.price), listPrice: r.list_price == null ? undefined : n(r.list_price), at: new Date(n(r.at)) };
+}
+
+function toPost(r: Row): Post {
+  const s = (v: unknown) => (v == null ? null : String(v));
+  return {
+    id: String(r.id),
+    date: String(r.date),
+    slot: r.slot as Post['slot'],
+    format: r.format as Post['format'],
+    theme: s(r.theme),
+    title: String(r.title),
+    hook: s(r.hook),
+    script: s(r.script),
+    caption: s(r.caption),
+    hashtags: s(r.hashtags),
+    filming: s(r.filming),
+    productId: s(r.product_id),
+    status: r.status as Post['status'],
+    notes: s(r.notes),
+    updatedAt: new Date(n(r.updated_at)).toISOString(),
+  };
 }
 
 function toProduct(r: Row): Product {

@@ -14,7 +14,8 @@ let email: LogEmailSender;
 /** Apple de mentira: o "token" é o próprio sub; "bad" é rejeitado. */
 const fakeApple: AppleVerifier = { verify: async (t) => { if (t.startsWith('bad')) throw new Error('x'); const [sub, mail] = t.split('|'); return { sub: sub!, email: mail }; } };
 let pix: DevPix;
-const serverAt = (now?: Date) => buildServer(repo, { clock: now ? () => now : undefined, email, apple: fakeApple, revenuecatAuth: 'rc-secret', allowDevPurchases: true, pix });
+const serverAt = (now?: Date) =>
+  buildServer(repo, { clock: now ? () => now : undefined, email, apple: fakeApple, revenuecatAuth: 'rc-secret', allowDevPurchases: true, pix, adminEmails: ['dono@k.br'], adminApiKey: 'agente-123', siteUrl: 'https://k.br' });
 
 const DAY = 86_400_000;
 const T0 = new Date('2026-09-01T15:00:00Z').getTime();
@@ -286,6 +287,46 @@ describe('vitrine com filtros', () => {
     expect((await get('?maxPrice=21000')).offers.map((o: { id: string }) => o.id)).toEqual(['mercadolivre:fone']);
     expect((await get('?stores=Shopee')).total).toBe(0);
     expect((await get('?categories=casa')).total).toBe(1);
+  });
+});
+
+describe('Estúdio (cronograma de posts)', () => {
+  it('só administrador ou o agente entram; cria, atualiza e lista posts; achados não repetem produto', async () => {
+    await stableHistory();
+    const now = new Date(T0 + 30 * DAY);
+    store.set('af', 'Air Fryer 4L Digital', 'casa', 24900, 51900);
+    store.set('fone', 'Fone Bluetooth Over-ear', 'eletronicos', 20900, 28900);
+    await runMonitor(repo, [store], sender, now, { notify: false });
+    const app = serverAt(now);
+    const login = async (addr: string) => {
+      await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: addr } });
+      const r = (await app.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: addr, code: email.last.get(addr.toLowerCase()) } })).json();
+      return { authorization: `Bearer ${r.token}` };
+    };
+    const outsider = await login('outro@k.br');
+    expect((await app.inject({ method: 'GET', url: '/v1/admin/me', headers: outsider })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/v1/admin/me', headers: { 'x-admin-key': 'errada' } })).statusCode).toBe(404);
+    const dono = await login('Dono@k.br');
+    expect((await app.inject({ method: 'GET', url: '/v1/admin/me', headers: dono })).json()).toEqual({ admin: true });
+    const agente = { 'x-admin-key': 'agente-123' };
+
+    // Post novo precisa de título e formato.
+    expect((await app.inject({ method: 'PUT', url: '/v1/admin/posts/2026-11-11/12h', headers: agente, payload: { hook: 'x' } })).statusCode).toBe(400);
+    const created = (await app.inject({ method: 'PUT', url: '/v1/admin/posts/2026-11-11/12h', headers: agente, payload: { format: 'achado', title: 'Air fryer', productId: 'mercadolivre:af', status: 'roteiro', script: 'Gente...' } })).json();
+    expect(created.post).toMatchObject({ id: '2026-11-11/12h', status: 'roteiro', script: 'Gente...' });
+    // Atualizar só o status mantém o resto.
+    await app.inject({ method: 'PUT', url: '/v1/admin/posts/2026-11-11/12h', headers: dono, payload: { status: 'gravado' } });
+    await app.inject({ method: 'PUT', url: '/v1/admin/posts/2026-11-12/19h', headers: dono, payload: { format: 'gica', title: 'Black Fraude' } });
+    const list = (await app.inject({ method: 'GET', url: '/v1/admin/posts?from=2026-11-11&to=2026-11-30', headers: dono })).json().posts;
+    expect(list.map((p: { id: string; status: string }) => [p.id, p.status])).toEqual([['2026-11-11/12h', 'gravado'], ['2026-11-12/19h', 'ideia']]);
+    expect(list[0].script).toBe('Gente...');
+
+    // Achados: a air fryer já foi usada, então só sobra o fone; com link da página.
+    const deals = (await app.inject({ method: 'GET', url: '/v1/admin/deals', headers: agente })).json().deals;
+    expect(deals.map((d: { id: string }) => d.id)).toEqual(['mercadolivre:fone']);
+    expect(deals[0]).toMatchObject({ price: 20900, pageUrl: 'https://k.br/oferta/mercadolivre%3Afone', locked: false });
+
+    expect((await app.inject({ method: 'DELETE', url: '/v1/admin/posts/2026-11-12/19h', headers: dono })).statusCode).toBe(204);
   });
 });
 

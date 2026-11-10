@@ -35,6 +35,10 @@ export const config = {
   /** Site, para os links dos e-mails (aviso de meta). */
   siteUrl: (process.env.SITE_URL ?? 'https://keropromo.com.br').replace(/\/$/, ''),
   proEmails: (process.env.PRO_EMAILS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+  /** Quem entra no Estúdio (cronograma de posts). Separados por vírgula. */
+  adminEmails: (process.env.ADMIN_EMAILS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  /** Chave do agente da manhã (tarefa agendada) para escrever no Estúdio, no cabeçalho x-admin-key. */
+  adminApiKey: cleanSecret(process.env.ADMIN_API_KEY),
   webOrigins: (process.env.WEB_ORIGINS ?? 'http://localhost:3000').split(',').map((s) => s.trim()).filter(Boolean),
 };
 
