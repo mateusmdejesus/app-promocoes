@@ -558,7 +558,9 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
     const now = clock();
     const answeredByMe = (c: (typeof all)[number]) => c.replies.some((r) => r.username.toLowerCase() === me);
 
-    const missing = all.filter((c) => !states.get(c.id)?.label);
+    // Sem tipo ainda, ou (com IA ligada) marcado só pelas regras e nunca corrigido à mão.
+    const needsLabel = (st?: CommentState) => !st?.label || (!!deps.commentAi && !st.byAi && !st.manual);
+    const missing = all.filter((c) => needsLabel(states.get(c.id)));
     let ai = new Map<string, { label: (typeof COMMENT_LABELS)[number]; priority: 'alta' | 'media' | 'baixa' }>();
     if (deps.commentAi && missing.length) {
       ai = await deps.commentAi.classify(missing.slice(0, 80)).catch((e) => {
@@ -568,8 +570,8 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
     }
     for (const c of all) {
       const cur = states.get(c.id);
-      if (!cur?.label) {
-        const got = ai.get(c.id);
+      const got = ai.get(c.id);
+      if (!cur?.label || (got && needsLabel(cur))) {
         const cls = got ?? classifyByRules(c.text);
         states.set(c.id, repo.setCommentState(c.id, { mediaId: c.mediaId, ...cls, byAi: !!got, status: cur?.status ?? (answeredByMe(c) ? 'respondido' : 'novo') }, now));
       } else if (cur.status === 'novo' && answeredByMe(c)) {
@@ -611,7 +613,7 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
       .object({ ids: z.array(z.string().regex(/^\d+$/)).min(1).max(500), status: z.enum(COMMENT_STATUSES).optional(), label: z.enum(COMMENT_LABELS).optional() })
       .parse(req.body);
     const patch: Partial<CommentState> = { status: body.status };
-    if (body.label) Object.assign(patch, { label: body.label, priority: priorityFor(body.label), byAi: false });
+    if (body.label) Object.assign(patch, { label: body.label, priority: priorityFor(body.label), byAi: false, manual: true });
     const now = clock();
     return { updated: body.ids.map((id) => repo.setCommentState(id, patch, now)) };
   });

@@ -80,3 +80,20 @@ describe('Estúdio: caixa de comentários', () => {
     expect((await app.inject({ method: 'GET', url: '/v1/admin/instagram/inbox' })).statusCode).toBe(404);
   });
 });
+
+describe('Estúdio: IA ligada depois', () => {
+  it('reclassifica o que foi marcado por regra, mas respeita o tipo corrigido à mão', async () => {
+    const repo = new Repo(openDb(':memory:'));
+    const { client } = fakeIg();
+    const h = { 'x-admin-key': 'k' };
+    const semIa = buildServer(repo, { email: new LogEmailSender(), adminApiKey: 'k', instagram: client });
+    await semIa.inject({ method: 'GET', url: '/v1/admin/instagram/inbox', headers: h });
+    await semIa.inject({ method: 'POST', url: '/v1/admin/instagram/comments/state', headers: h, payload: { ids: ['3'], label: 'pergunta' } });
+
+    const fakeAi = { classify: async (cs: Array<{ id: string }>) => new Map(cs.map((c) => [c.id, { label: 'lead' as const, priority: 'alta' as const }])), suggest: async () => [] };
+    const comIa = buildServer(repo, { email: new LogEmailSender(), adminApiKey: 'k', instagram: client, commentAi: fakeAi as never });
+    const inbox = (await comIa.inject({ method: 'GET', url: '/v1/admin/instagram/inbox', headers: h })).json();
+    const got = Object.fromEntries(inbox.comments.map((c: { id: string; label: string; byAi: boolean }) => [c.id, `${c.label}/${c.byAi}`]));
+    expect(got).toEqual({ '1': 'lead/true', '2': 'lead/true', '3': 'pergunta/false' });
+  });
+});

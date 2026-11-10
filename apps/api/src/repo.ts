@@ -43,6 +43,8 @@ export interface CommentState {
   label?: CommentLabel;
   priority?: CommentPriority;
   byAi: boolean;
+  /** Tipo corrigido à mão: a IA não mexe mais. */
+  manual?: boolean;
   suggestions?: string[];
 }
 
@@ -346,6 +348,7 @@ export class Repo {
           label: r.label == null ? undefined : (String(r.label) as CommentLabel),
           priority: r.priority == null ? undefined : (String(r.priority) as CommentPriority),
           byAi: n(r.by_ai) === 1,
+          manual: n(r.by_ai) === 2,
           suggestions: r.suggestions == null ? undefined : (JSON.parse(String(r.suggestions)) as string[]),
         });
     }
@@ -362,7 +365,7 @@ export class Repo {
          ON CONFLICT(id) DO UPDATE SET media_id = excluded.media_id, status = excluded.status, label = excluded.label, priority = excluded.priority,
            by_ai = excluded.by_ai, suggestions = excluded.suggestions, updated_at = excluded.updated_at`,
       )
-      .run(id, next.mediaId ?? null, next.status, next.label ?? null, next.priority ?? null, next.byAi ? 1 : 0, next.suggestions ? JSON.stringify(next.suggestions) : null, now.getTime());
+      .run(id, next.mediaId ?? null, next.status, next.label ?? null, next.priority ?? null, next.byAi ? 1 : next.manual ? 2 : 0, next.suggestions ? JSON.stringify(next.suggestions) : null, now.getTime());
     return next;
   }
 
