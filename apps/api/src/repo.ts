@@ -28,6 +28,24 @@ export const POST_SLOTS = ['12h', '19h'] as const;
 export const POST_FORMATS = ['achado', 'gica'] as const;
 export const POST_STATUSES = ['ideia', 'roteiro', 'gravado', 'postado'] as const;
 
+export const COMMENT_STATUSES = ['novo', 'respondido', 'ignorado'] as const;
+export const COMMENT_LABELS = ['reclamacao', 'pergunta', 'lead', 'elogio', 'spam', 'outro'] as const;
+export const COMMENT_PRIORITIES = ['alta', 'media', 'baixa'] as const;
+export type CommentStatus = (typeof COMMENT_STATUSES)[number];
+export type CommentLabel = (typeof COMMENT_LABELS)[number];
+export type CommentPriority = (typeof COMMENT_PRIORITIES)[number];
+
+/** O que o Estúdio guarda de cada comentário (o texto vem sempre do Instagram). */
+export interface CommentState {
+  id: string;
+  mediaId?: string;
+  status: CommentStatus;
+  label?: CommentLabel;
+  priority?: CommentPriority;
+  byAi: boolean;
+  suggestions?: string[];
+}
+
 /** Post do cronograma do Estúdio. */
 export interface Post {
   id: string;
@@ -310,6 +328,42 @@ export class Repo {
   featuredProductsSince(date: string): Set<string> {
     const rows = this.db.prepare("SELECT product_id FROM posts WHERE product_id IS NOT NULL AND date >= ?").all(date) as Row[];
     return new Set(rows.map((r) => String(r.product_id)));
+  }
+
+  // ---------- Estúdio: caixa de comentários ----------
+
+  commentStates(ids: string[]): Map<string, CommentState> {
+    const out = new Map<string, CommentState>();
+    for (let i = 0; i < ids.length; i += 400) {
+      const chunk = ids.slice(i, i + 400);
+      if (!chunk.length) continue;
+      const rows = this.db.prepare(`SELECT * FROM ig_comments WHERE id IN (${chunk.map(() => '?').join(',')})`).all(...chunk) as Row[];
+      for (const r of rows)
+        out.set(String(r.id), {
+          id: String(r.id),
+          mediaId: r.media_id == null ? undefined : String(r.media_id),
+          status: String(r.status) as CommentStatus,
+          label: r.label == null ? undefined : (String(r.label) as CommentLabel),
+          priority: r.priority == null ? undefined : (String(r.priority) as CommentPriority),
+          byAi: n(r.by_ai) === 1,
+          suggestions: r.suggestions == null ? undefined : (JSON.parse(String(r.suggestions)) as string[]),
+        });
+    }
+    return out;
+  }
+
+  /** Grava só o que veio no patch; o resto fica como estava. */
+  setCommentState(id: string, patch: Partial<Omit<CommentState, 'id'>>, now: Date): CommentState {
+    const cur = this.commentStates([id]).get(id);
+    const next: CommentState = { id, status: 'novo', byAi: false, ...cur, ...Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) };
+    this.db
+      .prepare(
+        `INSERT INTO ig_comments (id, media_id, status, label, priority, by_ai, suggestions, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET media_id = excluded.media_id, status = excluded.status, label = excluded.label, priority = excluded.priority,
+           by_ai = excluded.by_ai, suggestions = excluded.suggestions, updated_at = excluded.updated_at`,
+      )
+      .run(id, next.mediaId ?? null, next.status, next.label ?? null, next.priority ?? null, next.byAi ? 1 : 0, next.suggestions ? JSON.stringify(next.suggestions) : null, now.getTime());
+    return next;
   }
 
   /** Tira do ar as ofertas de lojas que saíram de STORES (o histórico de preço fica guardado). */

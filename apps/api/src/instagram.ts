@@ -45,6 +45,7 @@ export interface IgComment {
   username: string;
   timestamp: string;
   likes: number;
+  hidden: boolean;
   replies: Array<{ id: string; text: string; username: string; timestamp: string }>;
 }
 
@@ -193,14 +194,15 @@ export class InstagramClient {
       `comments:${mediaId}`,
       async () => {
         const r = await this.call<{
-          data: Array<{ id: string; text: string; username?: string; timestamp: string; like_count?: number; replies?: { data: Array<{ id: string; text: string; username?: string; timestamp: string }> } }>;
-        }>(`${mediaId}/comments`, { params: { fields: 'id,text,username,timestamp,like_count,replies{id,text,username,timestamp}', limit: '50' } });
+          data: Array<{ id: string; text: string; username?: string; timestamp: string; like_count?: number; hidden?: boolean; replies?: { data: Array<{ id: string; text: string; username?: string; timestamp: string }> } }>;
+        }>(`${mediaId}/comments`, { params: { fields: 'id,text,username,timestamp,like_count,hidden,replies{id,text,username,timestamp}', limit: '50' } });
         return r.data.map((c) => ({
           id: c.id,
           text: c.text,
           username: c.username ?? '',
           timestamp: c.timestamp,
           likes: c.like_count ?? 0,
+          hidden: c.hidden === true,
           replies: (c.replies?.data ?? []).map((x) => ({ id: x.id, text: x.text, username: x.username ?? '', timestamp: x.timestamp })),
         }));
       },
@@ -211,7 +213,17 @@ export class InstagramClient {
   async reply(commentId: string, message: string): Promise<{ id: string }> {
     const r = await this.call<{ id: string }>(`${commentId}/replies`, { method: 'POST', params: { message } });
     // O próximo carregamento dos comentários já vem com a resposta.
-    for (const k of [...this.cache.keys()]) if (k.startsWith('comments:')) this.cache.delete(k);
+    this.dropComments();
     return r;
+  }
+
+  /** Esconde (ou mostra de novo) um comentário no post. Quem comentou não fica sabendo. */
+  async hide(commentId: string, hide: boolean): Promise<void> {
+    await this.call(commentId, { method: 'POST', params: { hide: String(hide) } });
+    this.dropComments();
+  }
+
+  private dropComments() {
+    for (const k of [...this.cache.keys()]) if (k.startsWith('comments:')) this.cache.delete(k);
   }
 }

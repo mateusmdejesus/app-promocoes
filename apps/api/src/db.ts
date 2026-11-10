@@ -158,6 +158,19 @@ export function openDb(path: string): DB {
     );
     CREATE INDEX IF NOT EXISTS posts_date ON posts (date);
 
+    -- Estúdio: estado de cada comentário do Instagram na caixa de entrada.
+    -- status: novo (a revisar), respondido, ignorado. label/priority: classificação.
+    CREATE TABLE IF NOT EXISTS ig_comments (
+      id TEXT PRIMARY KEY,
+      media_id TEXT,
+      status TEXT NOT NULL DEFAULT 'novo',
+      label TEXT,
+      priority TEXT,
+      by_ai INTEGER NOT NULL DEFAULT 0,
+      suggestions TEXT,
+      updated_at INTEGER NOT NULL
+    );
+
     -- Pares chave/valor do servidor (ex.: refresh token do Mercado Livre).
     CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 

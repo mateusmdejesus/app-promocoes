@@ -6,6 +6,7 @@ import { runMonitor } from './monitor';
 import { ExpoPushSender } from './push';
 import { notifyWatches } from './watches';
 import { InstagramClient } from './instagram';
+import { CommentAi } from './commentAi';
 import { Repo } from './repo';
 import { seedDemoHistory } from './seedDemo';
 import { buildServer } from './server';
@@ -57,7 +58,9 @@ const app = buildServer(repo, {
   adminApiKey: config.adminApiKey || undefined,
   siteUrl: config.siteUrl,
   instagram,
+  commentAi: config.anthropicApiKey ? new CommentAi(config.anthropicApiKey, config.commentsAiModel) : undefined,
 });
+console.log(`[comentários] ${config.anthropicApiKey ? `IA ligada (${config.commentsAiModel})` : 'sem IA (ANTHROPIC_API_KEY vazio): classificação por regras'}`);
 console.log(`[instagram] ${config.igAccessToken && config.igUserId ? `conectado (conta ${config.igUserId})` : 'desligado (falta IG_ACCESS_TOKEN ou IG_USER_ID)'}`);
 console.log(`[pix] ${config.mpAccessToken ? `Mercado Pago, chave ${describeSecret(config.mpAccessToken)}` : config.allowDevPurchases ? 'modo de teste' : 'desligado (sem MP_ACCESS_TOKEN)'}`);
 if (!config.resendApiKey) console.log('[auth] RESEND_API_KEY vazio: os códigos de login aparecem aqui no terminal.');

@@ -8,7 +8,8 @@ import type { DevPix, PixProvider } from './billing';
 import { browse, hotOffers, personalFeed, search, searchProducts, toDTO, type OfferDTO } from './feed';
 import { MAX_WATCHES, targetLimit, watchList } from './watches';
 import type { InstagramClient } from './instagram';
-import { POST_FORMATS, POST_SLOTS, POST_STATUSES, type Repo } from './repo';
+import { classifyByRules, priorityFor, templateReplies, type CommentAi } from './commentAi';
+import { COMMENT_LABELS, COMMENT_STATUSES, POST_FORMATS, POST_SLOTS, POST_STATUSES, type CommentState, type Repo } from './repo';
 
 const DAY_MS = 86_400_000;
 const category = z.enum(CATEGORIES);
@@ -45,6 +46,8 @@ export interface ServerDeps {
   siteUrl?: string;
   /** Instagram da conta de Criador, para o Estúdio. */
   instagram?: InstagramClient;
+  /** Claude para os comentários. Sem ele, regras simples e respostas prontas. */
+  commentAi?: CommentAi;
 }
 
 const PLAN_DAYS = { monthly: 30, yearly: 365 } as const;
@@ -524,11 +527,129 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
     return { comments: await ig().comments(id, fresh).catch((e) => Promise.reject(igFail(e))) };
   });
 
+  const commentId = z.object({ id: z.string().regex(/^\d+$/) });
+
   app.post('/v1/admin/instagram/comments/:id/reply', async (req) => {
     requireAdmin(req);
-    const { id } = z.object({ id: z.string().regex(/^\d+$/) }).parse(req.params);
+    const { id } = commentId.parse(req.params);
     const { message } = z.object({ message: z.string().trim().min(1).max(2200) }).parse(req.body);
-    return await ig().reply(id, message).catch((e) => Promise.reject(igFail(e)));
+    const r = await ig().reply(id, message).catch((e) => Promise.reject(igFail(e)));
+    repo.setCommentState(id, { status: 'respondido' }, clock());
+    return r;
+  });
+
+  /**
+   * Caixa de entrada: comentários dos posts recentes, cada um com tipo (reclamação, pergunta,
+   * lead, elogio, spam), prioridade e situação (a revisar, respondido, ignorado).
+   * Comentário novo é classificado uma vez só e fica guardado.
+   */
+  app.get('/v1/admin/instagram/inbox', async (req) => {
+    requireAdmin(req);
+    const { fresh } = z.object({ fresh: z.coerce.boolean().optional() }).parse(req.query);
+    const client = ig();
+    const [account, media] = await Promise.all([client.account(fresh), client.media(24, fresh)]).catch((e) => {
+      throw igFail(e);
+    });
+    const posts = media.filter((m) => m.comments > 0).slice(0, 12);
+    const lists = await Promise.all(posts.map((m) => client.comments(m.id, fresh).catch(() => [])));
+    const me = account.username.toLowerCase();
+    const all = posts.flatMap((m, i) => lists[i]!.filter((c) => c.username.toLowerCase() !== me).map((c) => ({ ...c, mediaId: m.id })));
+    const states = repo.commentStates(all.map((c) => c.id));
+    const now = clock();
+    const answeredByMe = (c: (typeof all)[number]) => c.replies.some((r) => r.username.toLowerCase() === me);
+
+    const missing = all.filter((c) => !states.get(c.id)?.label);
+    let ai = new Map<string, { label: (typeof COMMENT_LABELS)[number]; priority: 'alta' | 'media' | 'baixa' }>();
+    if (deps.commentAi && missing.length) {
+      ai = await deps.commentAi.classify(missing.slice(0, 80)).catch((e) => {
+        req.log.warn({ err: (e as Error).message }, 'IA dos comentários falhou; usando regras');
+        return ai;
+      });
+    }
+    for (const c of all) {
+      const cur = states.get(c.id);
+      if (!cur?.label) {
+        const got = ai.get(c.id);
+        const cls = got ?? classifyByRules(c.text);
+        states.set(c.id, repo.setCommentState(c.id, { mediaId: c.mediaId, ...cls, byAi: !!got, status: cur?.status ?? (answeredByMe(c) ? 'respondido' : 'novo') }, now));
+      } else if (cur.status === 'novo' && answeredByMe(c)) {
+        // Respondeu pelo app do Instagram: já conta como feito.
+        states.set(c.id, repo.setCommentState(c.id, { status: 'respondido' }, now));
+      }
+    }
+
+    const comments = all.map((c) => {
+      const st = states.get(c.id)!;
+      return { ...c, status: st.status, label: st.label ?? 'outro', priority: st.priority ?? 'baixa', byAi: st.byAi, answeredByMe: answeredByMe(c) };
+    });
+    return {
+      account: { username: account.username, pictureUrl: account.pictureUrl },
+      aiEnabled: !!deps.commentAi,
+      posts: posts.map((m) => {
+        const mine = comments.filter((c) => c.mediaId === m.id);
+        const count = (l: string) => mine.filter((c) => c.label === l).length;
+        return {
+          id: m.id,
+          caption: m.caption,
+          permalink: m.permalink,
+          thumbnailUrl: m.thumbnailUrl,
+          timestamp: m.timestamp,
+          likes: m.likes,
+          comments: m.comments,
+          novos: mine.filter((c) => c.status === 'novo').length,
+          labels: Object.fromEntries(COMMENT_LABELS.map((l) => [l, count(l)])),
+        };
+      }),
+      comments,
+    };
+  });
+
+  /** Marca um ou vários comentários (situação e/ou tipo). */
+  app.post('/v1/admin/instagram/comments/state', async (req) => {
+    requireAdmin(req);
+    const body = z
+      .object({ ids: z.array(z.string().regex(/^\d+$/)).min(1).max(500), status: z.enum(COMMENT_STATUSES).optional(), label: z.enum(COMMENT_LABELS).optional() })
+      .parse(req.body);
+    const patch: Partial<CommentState> = { status: body.status };
+    if (body.label) Object.assign(patch, { label: body.label, priority: priorityFor(body.label), byAi: false });
+    const now = clock();
+    return { updated: body.ids.map((id) => repo.setCommentState(id, patch, now)) };
+  });
+
+  /** Esconde do post (ou mostra de novo). Esconder também tira da fila "a revisar". */
+  app.post('/v1/admin/instagram/comments/:id/hide', async (req) => {
+    requireAdmin(req);
+    const { id } = commentId.parse(req.params);
+    const { hide } = z.object({ hide: z.boolean() }).parse(req.body);
+    await ig().hide(id, hide).catch((e) => Promise.reject(igFail(e)));
+    return { state: repo.setCommentState(id, hide ? { status: 'ignorado' } : {}, clock()) };
+  });
+
+  /** 3 respostas sugeridas. Com IA, ficam guardadas (refresh=true pede outras). */
+  app.post('/v1/admin/instagram/comments/:id/suggest', async (req) => {
+    requireAdmin(req);
+    const { id } = commentId.parse(req.params);
+    const { mediaId, refresh } = z.object({ mediaId: z.string().regex(/^\d+$/), refresh: z.boolean().optional() }).parse(req.body);
+    const client = ig();
+    const [media, list] = await Promise.all([client.media(24), client.comments(mediaId)]).catch((e) => {
+      throw igFail(e);
+    });
+    const c = list.find((x) => x.id === id);
+    if (!c) throw fail(404, 'Comentário não encontrado nesse post.');
+    const st = repo.commentStates([id]).get(id);
+    const label = st?.label ?? classifyByRules(c.text).label;
+    if (!deps.commentAi) return { suggestions: templateReplies({ username: c.username, label }), ai: false };
+    if (st?.suggestions?.length && !refresh) return { suggestions: st.suggestions, ai: true };
+    const caption = media.find((m) => m.id === mediaId)?.caption ?? '';
+    const suggestions = await deps.commentAi
+      .suggest({ id, username: c.username, text: c.text, label, caption, replies: c.replies.map((r) => `@${r.username}: ${r.text}`) })
+      .catch((e) => {
+        req.log.warn({ err: (e as Error).message }, 'IA das respostas falhou');
+        return [] as string[];
+      });
+    if (!suggestions.length) return { suggestions: templateReplies({ username: c.username, label }), ai: false };
+    repo.setCommentState(id, { mediaId, suggestions }, clock());
+    return { suggestions, ai: true };
   });
 
   // ---------- vitrine com filtros ----------

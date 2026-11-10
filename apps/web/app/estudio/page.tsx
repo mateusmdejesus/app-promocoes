@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSession } from '../../components/Session';
 import { api, ApiError, brl, type Deal, type IgOverview, type Post, type PostSlot, type PostStatus } from '../../lib/api';
-import { CommentsView, InstagramView, useInstagram } from './Instagram';
+import { InstagramView, useInstagram } from './Instagram';
+import { CommentsView } from './Comments';
 import s from './estudio.module.css';
 
 /** Campanha de Black Friday: 11 a 30 de novembro, 2 posts por dia. */
@@ -142,7 +143,7 @@ export default function Estudio() {
         ) : view === 'instagram' ? (
           <InstagramView ig={ig} />
         ) : view === 'comments' ? (
-          <CommentsView ig={ig} />
+          <CommentsView />
         ) : (
           <Deals deals={deals} />
         )}

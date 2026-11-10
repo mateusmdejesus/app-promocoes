@@ -42,6 +42,9 @@ export const config = {
   /** Instagram da conta de Criador (Estúdio). */
   igAccessToken: cleanSecret(process.env.IG_ACCESS_TOKEN),
   igUserId: (process.env.IG_USER_ID ?? '').trim(),
+  /** Claude para classificar comentários e sugerir respostas (opcional: sem ela, regras simples). */
+  anthropicApiKey: cleanSecret(process.env.ANTHROPIC_API_KEY),
+  commentsAiModel: (process.env.COMMENTS_AI_MODEL ?? 'claude-opus-5-5').trim(),
   webOrigins: (process.env.WEB_ORIGINS ?? 'http://localhost:3000').split(',').map((s) => s.trim()).filter(Boolean),
 };
 

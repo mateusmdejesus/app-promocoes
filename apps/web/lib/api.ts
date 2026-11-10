@@ -120,12 +120,44 @@ export interface IgOverview {
   insightsAvailable: boolean;
   totals: { posts: number; likes: number; comments: number; views: number | null; reach: number | null; saved: number | null; shares: number | null };
 }
+export type CommentLabel = 'reclamacao' | 'pergunta' | 'lead' | 'elogio' | 'spam' | 'outro';
+export type CommentStatus = 'novo' | 'respondido' | 'ignorado';
+
+export interface InboxComment extends IgComment {
+  mediaId: string;
+  label: CommentLabel;
+  priority: 'alta' | 'media' | 'baixa';
+  status: CommentStatus;
+  byAi: boolean;
+  answeredByMe: boolean;
+}
+
+export interface InboxPost {
+  id: string;
+  caption: string;
+  permalink: string;
+  thumbnailUrl?: string;
+  timestamp: string;
+  likes: number;
+  comments: number;
+  novos: number;
+  labels: Record<CommentLabel, number>;
+}
+
+export interface Inbox {
+  account: { username: string; pictureUrl?: string };
+  aiEnabled: boolean;
+  posts: InboxPost[];
+  comments: InboxComment[];
+}
+
 export interface IgComment {
   id: string;
   text: string;
   username: string;
   timestamp: string;
   likes: number;
+  hidden?: boolean;
   replies: Array<{ id: string; text: string; username: string; timestamp: string }>;
 }
 
@@ -216,6 +248,11 @@ export const api = {
   instagram: (fresh = false) => call<IgOverview>('GET', `/v1/admin/instagram?limit=24${fresh ? '&fresh=1' : ''}`),
   igComments: (mediaId: string, fresh = false) => call<{ comments: IgComment[] }>('GET', `/v1/admin/instagram/media/${mediaId}/comments${fresh ? '?fresh=1' : ''}`),
   igReply: (commentId: string, message: string) => call<{ id: string }>('POST', `/v1/admin/instagram/comments/${commentId}/reply`, { message }),
+  igInbox: (fresh = false) => call<Inbox>('GET', `/v1/admin/instagram/inbox${fresh ? '?fresh=1' : ''}`),
+  igCommentState: (ids: string[], patch: { status?: CommentStatus; label?: CommentLabel }) => call<unknown>('POST', '/v1/admin/instagram/comments/state', { ids, ...patch }),
+  igHide: (commentId: string, hide: boolean) => call<unknown>('POST', `/v1/admin/instagram/comments/${commentId}/hide`, { hide }),
+  igSuggest: (commentId: string, mediaId: string, refresh = false) =>
+    call<{ suggestions: string[]; ai: boolean }>('POST', `/v1/admin/instagram/comments/${commentId}/suggest`, { mediaId, refresh }),
   adminDeals: (limit = 8) => call<{ deals: Deal[] }>('GET', `/v1/admin/deals?limit=${limit}`),
   browse: (f: BrowseFilters) => {
     const p = new URLSearchParams();
