@@ -5,6 +5,17 @@ import type { DB } from './db';
 import { MercadoLivreAuth } from './mercadolivreAuth';
 import type { StoreAdapter } from './adapters/types';
 
+/** Chave colada no painel com espaço, quebra de linha, aspas ou "Bearer " na frente: limpa. */
+export function cleanSecret(v: string | undefined): string {
+  return (v ?? '').trim().replace(/^["']|["']$/g, '').replace(/^Bearer\s+/i, '').trim();
+}
+
+/** Para o log: só o começo e o tamanho, nunca a chave. */
+export function describeSecret(v: string): string {
+  if (!v) return 'vazia';
+  return `${v.slice(0, 8)}… (${v.length} caracteres)`;
+}
+
 export const config = {
   port: Number(process.env.PORT ?? 3333),
   databasePath: process.env.DATABASE_PATH ?? new URL('../keropromo.db', import.meta.url).pathname,
@@ -13,13 +24,13 @@ export const config = {
   mlClientId: process.env.ML_CLIENT_ID ?? '',
   mlClientSecret: process.env.ML_CLIENT_SECRET ?? '',
   mlRefreshToken: process.env.ML_REFRESH_TOKEN ?? '',
-  lomadeeApiKey: process.env.LOMADEE_API_KEY ?? '',
+  lomadeeApiKey: cleanSecret(process.env.LOMADEE_API_KEY),
   appleBundleId: process.env.APPLE_BUNDLE_ID ?? '',
-  resendApiKey: process.env.RESEND_API_KEY ?? '',
+  resendApiKey: cleanSecret(process.env.RESEND_API_KEY),
   emailFrom: process.env.EMAIL_FROM ?? 'keropromo <acesso@keropromo.com.br>',
   revenuecatWebhookAuth: process.env.REVENUECAT_WEBHOOK_AUTH ?? '',
   allowDevPurchases: process.env.ALLOW_DEV_PURCHASES === '1',
-  mpAccessToken: process.env.MP_ACCESS_TOKEN ?? '',
+  mpAccessToken: cleanSecret(process.env.MP_ACCESS_TOKEN),
   publicUrl: process.env.PUBLIC_URL ?? '',
   proEmails: (process.env.PRO_EMAILS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   webOrigins: (process.env.WEB_ORIGINS ?? 'http://localhost:3000').split(',').map((s) => s.trim()).filter(Boolean),

@@ -1,6 +1,6 @@
 import { AppleJwtVerifier, LogEmailSender, ResendEmailSender } from './auth';
 import { DevPix, MercadoPagoPix } from './billing';
-import { buildAdapters, config } from './config';
+import { buildAdapters, config, describeSecret } from './config';
 import { openDb } from './db';
 import { runMonitor } from './monitor';
 import { ExpoPushSender } from './push';
@@ -39,6 +39,7 @@ const app = buildServer(repo, {
   publicUrl: config.publicUrl || undefined,
   webOrigins: config.webOrigins,
 });
+console.log(`[pix] ${config.mpAccessToken ? `Mercado Pago, chave ${describeSecret(config.mpAccessToken)}` : config.allowDevPurchases ? 'modo de teste' : 'desligado (sem MP_ACCESS_TOKEN)'}`);
 if (!config.resendApiKey) console.log('[auth] RESEND_API_KEY vazio: os códigos de login aparecem aqui no terminal.');
 await app.listen({ port: config.port, host: '0.0.0.0' });
 console.log(`keropromo API em http://localhost:${config.port}`);
