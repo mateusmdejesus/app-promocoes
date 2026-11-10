@@ -61,13 +61,34 @@ export default function Ofertas() {
       .catch((e: Error) => setError(e.message));
   }, [ready, me, tab]);
 
+  const PAGE = 60;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const categoriesFor = () =>
+    cat !== "all" ? [cat] : tab === "casa" ? [...HOME_TAB_CATEGORIES] : undefined;
+
+  /** "Ver mais": busca a próxima página com os mesmos filtros e junta na lista. */
+  const loadMore = () => {
+    if (!all) return;
+    setLoadingMore(true);
+    api
+      .browse({ ...filters, q: filters.q?.trim() || undefined, categories: categoriesFor(), limit: PAGE, offset: all.length })
+      .then((r) => {
+        setAll((cur) => {
+          const seen = new Set((cur ?? []).map((o) => o.id));
+          return [...(cur ?? []), ...r.offers.filter((o) => !seen.has(o.id))];
+        });
+        setTotal(r.total);
+      })
+      .catch((e: Error) => setError(e.message))
+      .finally(() => setLoadingMore(false));
+  };
+
   useEffect(() => {
     if (!ready || tab === null || !me) return;
-    const categories =
-      cat !== "all" ? [cat] : tab === "casa" ? [...HOME_TAB_CATEGORIES] : undefined;
+    const categories = categoriesFor();
     const t = setTimeout(() => {
       api
-        .browse({ ...filters, q: filters.q?.trim() || undefined, categories, limit: 80 })
+        .browse({ ...filters, q: filters.q?.trim() || undefined, categories, limit: PAGE })
         .then((r) => {
           setAll(r.offers);
           setFacets(r.facets);
@@ -231,6 +252,13 @@ export default function Ofertas() {
               <OfferTile key={o.id} offer={o} />
             ))}
           </div>
+          {all && all.length < total ? (
+            <div className={s.more}>
+              <button type="button" className="btn btn-soft btn-lg" onClick={loadMore} disabled={loadingMore}>
+                {loadingMore ? "Carregando…" : `Ver mais promoções (${all.length} de ${total})`}
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : (
         <p className="muted" style={{ marginTop: 32 }}>

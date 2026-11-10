@@ -61,6 +61,7 @@ export interface BrowseFilters {
   minDiscount?: number;
   sort?: BrowseSort;
   limit?: number;
+  offset?: number;
 }
 
 export interface BrowseResult {
@@ -159,6 +160,7 @@ export const api = {
     if (f.minDiscount) p.set('minDiscount', String(f.minDiscount));
     if (f.sort) p.set('sort', f.sort);
     p.set('limit', String(f.limit ?? 60));
+    if (f.offset) p.set('offset', String(f.offset));
     return call<BrowseResult>('GET', `/v1/browse?${p}`);
   },
   watches: () => call<{ watches: Watch[]; limits: { targets: number } }>('GET', '/v1/watches'),
