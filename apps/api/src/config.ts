@@ -32,6 +32,8 @@ export const config = {
   allowDevPurchases: process.env.ALLOW_DEV_PURCHASES === '1',
   mpAccessToken: cleanSecret(process.env.MP_ACCESS_TOKEN),
   publicUrl: process.env.PUBLIC_URL ?? '',
+  /** Site, para os links dos e-mails (aviso de meta). */
+  siteUrl: (process.env.SITE_URL ?? 'https://keropromo.com.br').replace(/\/$/, ''),
   proEmails: (process.env.PRO_EMAILS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   webOrigins: (process.env.WEB_ORIGINS ?? 'http://localhost:3000').split(',').map((s) => s.trim()).filter(Boolean),
 };

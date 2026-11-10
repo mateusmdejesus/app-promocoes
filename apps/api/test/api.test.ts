@@ -8,6 +8,7 @@ import { Repo } from '../src/repo';
 import { buildServer } from '../src/server';
 import { LogEmailSender, type AppleVerifier } from '../src/auth';
 import { DevPix } from '../src/billing';
+import { notifyWatches } from '../src/watches';
 
 let email: LogEmailSender;
 /** Apple de mentira: o "token" é o próprio sub; "bad" é rejeitado. */
@@ -200,6 +201,91 @@ describe('vitrine', () => {
     const u = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
     const feed = (await app.inject({ method: 'GET', url: '/v1/feed?categories=eletro,casa', headers: { authorization: `Bearer ${u.secret}` } })).json();
     expect(feed.offers.map((o: { category: string }) => o.category)).toEqual(['casa']);
+  });
+});
+
+describe('vigiar produto e meta de preço', () => {
+  async function login(app: ReturnType<typeof serverAt>, addr: string) {
+    await app.inject({ method: 'POST', url: '/v1/auth/email/start', payload: { email: addr } });
+    const r = (await app.inject({ method: 'POST', url: '/v1/auth/email/verify', payload: { email: addr, code: email.last.get(addr) } })).json();
+    return { authorization: `Bearer ${r.token}` };
+  }
+
+  it('salva, limita metas no grátis e avisa por e-mail uma vez por queda', async () => {
+    await stableHistory();
+    let now = new Date(T0 + 30 * DAY);
+    const app = serverAt(now);
+    const h = await login(app, 'vig@x.com');
+
+    // Conta anônima não vigia.
+    const anon = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
+    expect((await app.inject({ method: 'PUT', url: '/v1/watches/mercadolivre:af', headers: { authorization: `Bearer ${anon.secret}` }, payload: {} })).statusCode).toBe(403);
+
+    expect((await app.inject({ method: 'PUT', url: '/v1/watches/mercadolivre:af', headers: h, payload: { targetPrice: 30000 } })).statusCode).toBe(204);
+    // Grátis: 1 meta. Salvar sem meta continua liberado.
+    expect((await app.inject({ method: 'PUT', url: '/v1/watches/mercadolivre:fone', headers: h, payload: { targetPrice: 20000 } })).statusCode).toBe(402);
+    expect((await app.inject({ method: 'PUT', url: '/v1/watches/mercadolivre:fone', headers: h, payload: {} })).statusCode).toBe(204);
+    expect((await app.inject({ method: 'PUT', url: '/v1/watches/nao-existe', headers: h, payload: {} })).statusCode).toBe(404);
+
+    const list = (await app.inject({ method: 'GET', url: '/v1/watches', headers: h })).json();
+    expect(list.limits.targets).toBe(1);
+    const af = list.watches.find((w: { id: string }) => w.id === 'mercadolivre:af');
+    expect(af).toMatchObject({ price: 51900, targetPrice: 30000, reached: false });
+
+    // Produto sem promoção abre a página mesmo assim, e diz que está sendo vigiado.
+    const page = (await app.inject({ method: 'GET', url: '/v1/offers/mercadolivre:fone', headers: h })).json();
+    expect(page.offer).toMatchObject({ tier: 'none', price: 28900, referencePrice: null });
+    expect(page.watching).toEqual({ targetPrice: null });
+
+    // Acima da meta: nada.
+    expect(await notifyWatches(repo, email, 'https://k.br', now)).toBe(0);
+    // Caiu para a meta: 1 aviso; mesma faixa de preço: não repete.
+    now = new Date(T0 + 30 * DAY + 3_600_000);
+    store.set('af', 'Air Fryer 4L Digital', 'casa', 24900, 51900);
+    await runMonitor(repo, [store], sender, now, { notify: false });
+    expect(await notifyWatches(repo, email, 'https://k.br', now)).toBe(1);
+    expect(email.alerts.at(-1)).toMatchObject({ to: 'vig@x.com', price: 24900, target: 30000, pageUrl: 'https://k.br/oferta/mercadolivre%3Aaf' });
+    expect(await notifyWatches(repo, email, 'https://k.br', now)).toBe(0);
+    // Subiu acima da meta e caiu de novo: avisa de novo.
+    store.set('af', 'Air Fryer 4L Digital', 'casa', 52000, 51900);
+    await runMonitor(repo, [store], sender, new Date(now.getTime() + 3_600_000), { notify: false });
+    expect(await notifyWatches(repo, email, 'https://k.br', now)).toBe(0);
+    store.set('af', 'Air Fryer 4L Digital', 'casa', 25000, 51900);
+    await runMonitor(repo, [store], sender, new Date(now.getTime() + 7_200_000), { notify: false });
+    expect(await notifyWatches(repo, email, 'https://k.br', now)).toBe(1);
+
+    expect((await app.inject({ method: 'DELETE', url: '/v1/watches/mercadolivre:af', headers: h })).statusCode).toBe(204);
+    expect((await app.inject({ method: 'GET', url: '/v1/watches', headers: h })).json().watches).toHaveLength(1);
+  });
+
+  it('busca qualquer produto acompanhado, com ou sem promoção', async () => {
+    await stableHistory();
+    const app = serverAt(new Date(T0 + 30 * DAY));
+    const h = await login(app, 'busca@x.com');
+    const r = (await app.inject({ method: 'GET', url: '/v1/products/search?q=fone', headers: h })).json();
+    expect(r.products).toEqual([expect.objectContaining({ id: 'mercadolivre:fone', price: 28900, watching: false })]);
+  });
+});
+
+describe('vitrine com filtros', () => {
+  it('filtra por busca, loja, preço e desconto, ordena e devolve as opções', async () => {
+    await stableHistory();
+    const now = new Date(T0 + 30 * DAY);
+    store.set('af', 'Air Fryer 4L Digital', 'casa', 24900, 51900); // −52%
+    store.set('fone', 'Fone Bluetooth Over-ear', 'eletronicos', 20900, 28900); // −27%
+    await runMonitor(repo, [store], sender, now, { notify: false });
+    const app = serverAt(now);
+    const u = (await app.inject({ method: 'POST', url: '/v1/users' })).json();
+    const get = async (qs: string) => (await app.inject({ method: 'GET', url: `/v1/browse${qs}`, headers: { authorization: `Bearer ${u.secret}` } })).json();
+
+    const all = await get('?sort=price_asc');
+    expect(all.offers.map((o: { id: string }) => o.id)).toEqual(['mercadolivre:fone', 'mercadolivre:af']);
+    expect(all.facets.stores).toEqual([{ name: 'Mercado Livre', count: 2 }]);
+    expect((await get('?minDiscount=40')).offers.map((o: { id: string }) => o.id)).toEqual(['mercadolivre:af']);
+    expect((await get('?q=air')).total).toBe(1);
+    expect((await get('?maxPrice=21000')).offers.map((o: { id: string }) => o.id)).toEqual(['mercadolivre:fone']);
+    expect((await get('?stores=Shopee')).total).toBe(0);
+    expect((await get('?categories=casa')).total).toBe(1);
   });
 });
 

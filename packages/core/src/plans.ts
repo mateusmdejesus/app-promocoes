@@ -21,7 +21,7 @@ export interface PlanLimits {
 
 export const LIMITS: Record<Plan, PlanLimits> = {
   free: { alerts: 1, historyDays: 7, hotDelayMin: 60, hotPush: false, checksPerMonth: 3 },
-  pro: { alerts: 30, historyDays: 90, hotDelayMin: 0, hotPush: true, checksPerMonth: Infinity },
+  pro: { alerts: 200, historyDays: 90, hotDelayMin: 0, hotPush: true, checksPerMonth: Infinity },
 };
 
 export function planFor(proUntil: Date | undefined, now: Date): Plan {

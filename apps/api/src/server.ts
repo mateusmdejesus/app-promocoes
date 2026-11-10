@@ -1,11 +1,12 @@
 import { randomInt, randomUUID } from 'node:crypto';
 import cors from '@fastify/cors';
 import Fastify, { type FastifyRequest } from 'fastify';
-import { CATEGORIES, LIMITS, planFor, PRICES, type Plan } from '@keropromo/core';
+import { CATEGORIES, LIMITS, lockedUntil, planFor, PRICES, storeLabel, type Plan } from '@keropromo/core';
 import { z } from 'zod';
 import { normalizeEmail, type AppleVerifier, type EmailSender } from './auth';
 import type { DevPix, PixProvider } from './billing';
-import { hotOffers, personalFeed, search, toDTO } from './feed';
+import { browse, hotOffers, personalFeed, search, searchProducts, toDTO, type OfferDTO } from './feed';
+import { MAX_WATCHES, targetLimit, watchList } from './watches';
 import type { Repo } from './repo';
 
 const DAY_MS = 86_400_000;
@@ -325,19 +326,122 @@ export function buildServer(repo: Repo, deps: ServerDeps) {
     return { offers };
   });
 
+  // Produto com promoção (oferta) ou sem (produto vigiado que ainda não está em promoção).
   app.get('/v1/offers/:id', async (req, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(req.params);
-    const offer = repo.getOffer(id);
-    if (!offer) return reply.status(404).send({ error: 'not_found' });
-    const plan = planOf(optionalUser(req));
+    const userId = optionalUser(req);
+    const plan = planOf(userId);
     const now = clock();
-    const dto = toDTO(offer, plan, now);
+    const offer = repo.getOffer(id);
+    let dto: OfferDTO;
+    if (offer && offer.analysis.tier !== 'none') {
+      dto = toDTO(offer, plan, now);
+    } else {
+      const product = repo.productById(id);
+      const last = product ? repo.lastPricePoint(id) : undefined;
+      if (!product || !last) return reply.status(404).send({ error: 'not_found' });
+      dto = {
+        id: product.id,
+        title: product.title,
+        category: product.category,
+        store: product.store,
+        storeName: storeLabel(product),
+        url: product.url,
+        imageUrl: product.imageUrl ?? null,
+        price: last.price,
+        referencePrice: null,
+        locked: false,
+        unlocksAt: null,
+        discountPct: 0,
+        tier: 'none',
+        verified: false,
+        lowestIn90d: false,
+        detectedAt: last.at.toISOString(),
+      };
+    }
     const days = LIMITS[plan].historyDays;
+    const watch = userId ? repo.isWatching(userId, id) : undefined;
     return {
       offer: dto,
       historyDays: days,
       history: dto.locked ? [] : repo.dailyLows(id, new Date(now.getTime() - days * DAY_MS)),
+      watching: watch ? { targetPrice: watch.targetPrice ?? null } : null,
     };
+  });
+
+  // ---------- vitrine com filtros ----------
+
+  const csv = z
+    .string()
+    .optional()
+    .transform((v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : undefined));
+  const cents = z.coerce.number().int().min(0).max(10_000_000).optional();
+
+  app.get('/v1/browse', async (req) => {
+    const userId = userOf(req);
+    const q = z
+      .object({
+        q: z.string().trim().max(80).optional(),
+        stores: csv,
+        categories: csv.pipe(z.array(category).optional()),
+        minPrice: cents,
+        maxPrice: cents,
+        minDiscount: z.coerce.number().int().min(0).max(100).optional(),
+        sort: z.enum(['relevance', 'discount', 'price_asc', 'price_desc', 'newest']).optional(),
+        limit: z.coerce.number().int().min(1).max(100).optional(),
+        offset: z.coerce.number().int().min(0).max(5000).optional(),
+      })
+      .parse(req.query);
+    return browse(repo, userId, planOf(userId), clock(), q);
+  });
+
+  // ---------- produtos vigiados e meta de preço ----------
+
+  /** Busca qualquer produto acompanhado (com ou sem promoção) para vigiar. */
+  app.get('/v1/products/search', async (req) => {
+    const userId = userOf(req);
+    const { q } = z.object({ q: z.string().trim().min(2).max(80) }).parse(req.query);
+    const plan = planOf(userId);
+    const now = clock();
+    return {
+      products: searchProducts(repo, q).map((p) => {
+        const o = repo.getOffer(p.id);
+        const locked = !!(o && lockedUntil(plan, o.analysis.tier, o.detectedAt, now));
+        return { ...p, price: locked ? null : p.price, locked, watching: !!repo.isWatching(userId, p.id) };
+      }),
+    };
+  });
+
+  app.get('/v1/watches', async (req) => {
+    const userId = userOf(req);
+    const plan = planOf(userId);
+    return { watches: watchList(repo, userId, plan, clock()), limits: { targets: targetLimit(plan) } };
+  });
+
+  /** Salva o produto para vigiar; `targetPrice` (centavos) liga a meta de preço, `null` tira. */
+  app.put('/v1/watches/:productId', async (req, reply) => {
+    const userId = userOf(req);
+    if (repo.isAnonymous(userId)) throw fail(403, 'Entre com seu e-mail para vigiar produtos.');
+    const { productId } = z.object({ productId: z.string().min(1) }).parse(req.params);
+    const body = z.object({ targetPrice: z.number().int().min(1).max(10_000_000).nullable().optional() }).parse(req.body ?? {});
+    if (!repo.productById(productId)) return reply.status(404).send({ error: 'not_found' });
+    const current = repo.isWatching(userId, productId);
+    const counts = repo.watchCounts(userId);
+    if (!current && counts.total >= MAX_WATCHES) throw fail(409, `Você já vigia ${MAX_WATCHES} produtos. Remova algum para salvar outro.`);
+    const target = body.targetPrice === undefined ? (current?.targetPrice ?? null) : body.targetPrice;
+    const plan = planOf(userId);
+    if (target != null && current?.targetPrice == null && counts.withTarget >= targetLimit(plan)) {
+      throw fail(402, plan === 'pro' ? `Você chegou ao limite de ${targetLimit(plan)} metas.` : 'No plano grátis dá para ter 1 meta de preço. Com o Pro, você cria quantas quiser.');
+    }
+    repo.saveWatch(userId, productId, target, clock());
+    return reply.status(204).send();
+  });
+
+  app.delete('/v1/watches/:productId', async (req, reply) => {
+    const userId = userOf(req);
+    const { productId } = z.object({ productId: z.string().min(1) }).parse(req.params);
+    repo.deleteWatch(userId, productId);
+    return reply.status(204).send();
   });
 
   app.post('/v1/events', async (req, reply) => {

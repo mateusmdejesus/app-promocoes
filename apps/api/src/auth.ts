@@ -2,8 +2,35 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 // ---------- e-mail com código ----------
 
+/** Aviso de que um produto vigiado chegou na meta de preço. Preços em centavos. */
+export interface PriceAlertMail {
+  title: string;
+  price: number;
+  target: number;
+  storeName: string;
+  /** Página do produto no keropromo. */
+  pageUrl: string;
+}
+
 export interface EmailSender {
   sendCode(to: string, code: string): Promise<void>;
+  sendPriceAlert(to: string, a: PriceAlertMail): Promise<void>;
+}
+
+const brl = (c: number) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+export function priceAlertText(a: PriceAlertMail): { subject: string; text: string } {
+  return {
+    subject: `Chegou na sua meta: ${a.title.slice(0, 60)} por ${brl(a.price)}`,
+    text:
+      `O produto que você está vigiando chegou no preço que você queria.\n\n` +
+      `${a.title}\n` +
+      `Agora: ${brl(a.price)} no ${a.storeName}\n` +
+      `Sua meta: ${brl(a.target)}\n\n` +
+      `Ver o produto e o histórico de preço: ${a.pageUrl}\n\n` +
+      `Preço pode mudar a qualquer momento; confira na loja antes de comprar.\n` +
+      `Para parar de receber, remova a meta em Vigiando, no keropromo.`,
+  };
 }
 
 /** Desenvolvimento: imprime o código no terminal da API em vez de enviar. */
@@ -12,6 +39,11 @@ export class LogEmailSender implements EmailSender {
   async sendCode(to: string, code: string) {
     this.last.set(to, code);
     console.log(`[auth] código para ${to}: ${code}`);
+  }
+  alerts: Array<{ to: string } & PriceAlertMail> = [];
+  async sendPriceAlert(to: string, a: PriceAlertMail) {
+    this.alerts.push({ to, ...a });
+    console.log(`[meta] aviso para ${to}: ${priceAlertText(a).subject}`);
   }
 }
 
@@ -33,6 +65,15 @@ export class ResendEmailSender implements EmailSender {
       }),
     });
     if (!res.ok) throw new Error(`Falha ao enviar e-mail (${res.status})`);
+  }
+  async sendPriceAlert(to: string, a: PriceAlertMail) {
+    const { subject, text } = priceAlertText(a);
+    const res = await this.fetchImpl('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: this.from, to, subject, text }),
+    });
+    if (!res.ok) throw new Error(`Falha ao enviar aviso de meta (${res.status})`);
   }
 }
 

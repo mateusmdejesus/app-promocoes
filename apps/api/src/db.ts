@@ -125,6 +125,19 @@ export function openDb(path: string): DB {
     );
     CREATE INDEX IF NOT EXISTS pending_pushes_due ON pending_pushes (send_after);
 
+    -- Produtos que a pessoa está vigiando, com meta de preço opcional (centavos).
+    -- notified_price: preço do último aviso de meta (evita repetir o mesmo aviso).
+    CREATE TABLE IF NOT EXISTS watches (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES products(id),
+      target_price INTEGER,
+      notified_price INTEGER,
+      notified_at INTEGER,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (user_id, product_id)
+    );
+    CREATE INDEX IF NOT EXISTS watches_target ON watches (target_price);
+
     -- Pares chave/valor do servidor (ex.: refresh token do Mercado Livre).
     CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 

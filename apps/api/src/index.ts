@@ -4,6 +4,7 @@ import { buildAdapters, config, describeSecret } from './config';
 import { openDb } from './db';
 import { runMonitor } from './monitor';
 import { ExpoPushSender } from './push';
+import { notifyWatches } from './watches';
 import { Repo } from './repo';
 import { seedDemoHistory } from './seedDemo';
 import { buildServer } from './server';
@@ -14,6 +15,7 @@ const adapters = buildAdapters(db);
 const pruned = repo.pruneOffersExcept(config.stores);
 if (pruned) console.log(`[lojas] ${pruned} ofertas de lojas desligadas foram tiradas do ar.`);
 const sender = new ExpoPushSender();
+const email = config.resendApiKey ? new ResendEmailSender(config.resendApiKey, config.emailFrom) : new LogEmailSender();
 
 let running = false;
 async function tick() {
@@ -21,7 +23,8 @@ async function tick() {
   running = true;
   try {
     const r = await runMonitor(repo, adapters, sender);
-    console.log(`[monitor] ${r.scanned} produtos, ${r.newDeals} ofertas novas, ${r.pushesSent} notificações${r.errors.length ? `, erros: ${r.errors.join('; ')}` : ''}`);
+    const metas = await notifyWatches(repo, email, config.siteUrl, new Date());
+    console.log(`[monitor] ${r.scanned} produtos, ${r.newDeals} ofertas novas, ${r.pushesSent} notificações, ${metas} avisos de meta${r.errors.length ? `, erros: ${r.errors.join('; ')}` : ''}`);
   } catch (e) {
     console.error('[monitor] falhou:', e);
   } finally {
@@ -30,7 +33,7 @@ async function tick() {
 }
 
 const app = buildServer(repo, {
-  email: config.resendApiKey ? new ResendEmailSender(config.resendApiKey, config.emailFrom) : new LogEmailSender(),
+  email,
   apple: config.appleBundleId ? new AppleJwtVerifier(config.appleBundleId) : undefined,
   revenuecatAuth: config.revenuecatWebhookAuth || undefined,
   allowDevPurchases: config.allowDevPurchases,

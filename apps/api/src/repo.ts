@@ -12,6 +12,18 @@ export interface OfferRow {
   detectedAt: Date;
 }
 
+/** Produto vigiado por alguém, com o preço mais recente e o menor dos últimos 90 dias. */
+export interface WatchRow {
+  product: Product;
+  targetPrice?: number;
+  notifiedPrice?: number;
+  createdAt: Date;
+  /** Último preço coletado (centavos). */
+  price?: number;
+  /** Menor preço dos últimos 90 dias (centavos). */
+  lowest90?: number;
+}
+
 export interface Alert extends AlertRule {
   id: string;
   userId: string;
@@ -154,6 +166,92 @@ export class Repo {
   userByApple(sub: string): string | undefined {
     const r = this.db.prepare('SELECT id FROM users WHERE apple_sub = ?').get(sub) as Row | undefined;
     return r ? String(r.id) : undefined;
+  }
+
+  // ---------- produtos e produtos vigiados ----------
+
+  productById(id: string): Product | undefined {
+    const r = this.db.prepare('SELECT * FROM products WHERE id = ?').get(id) as Row | undefined;
+    return r ? toProduct(r) : undefined;
+  }
+
+  /** Todos os produtos acompanhados, com o último preço (para buscar e vigiar qualquer um). */
+  productsWithPrice(): Array<{ product: Product; price: number }> {
+    const rows = this.db
+      .prepare(
+        `SELECT p.*, (SELECT price FROM price_points pp WHERE pp.product_id = p.id ORDER BY at DESC LIMIT 1) AS last_price
+         FROM products p`,
+      )
+      .all() as Row[];
+    return rows.filter((r) => r.last_price != null).map((r) => ({ product: toProduct(r), price: n(r.last_price) }));
+  }
+
+  watches(userId: string, now: Date): WatchRow[] {
+    const since = now.getTime() - 90 * 86_400_000;
+    const rows = this.db
+      .prepare(
+        `SELECT p.*, w.target_price, w.notified_price, w.created_at AS watched_at,
+           (SELECT price FROM price_points pp WHERE pp.product_id = p.id ORDER BY at DESC LIMIT 1) AS last_price,
+           (SELECT MIN(price) FROM price_points pp WHERE pp.product_id = p.id AND at >= ?) AS lowest
+         FROM watches w JOIN products p ON p.id = w.product_id
+         WHERE w.user_id = ? ORDER BY w.created_at DESC`,
+      )
+      .all(since, userId) as Row[];
+    return rows.map((r) => ({
+      product: toProduct(r),
+      targetPrice: r.target_price == null ? undefined : n(r.target_price),
+      notifiedPrice: r.notified_price == null ? undefined : n(r.notified_price),
+      createdAt: new Date(n(r.watched_at)),
+      price: r.last_price == null ? undefined : n(r.last_price),
+      lowest90: r.lowest == null ? undefined : n(r.lowest),
+    }));
+  }
+
+  isWatching(userId: string, productId: string): { targetPrice?: number } | undefined {
+    const r = this.db.prepare('SELECT target_price FROM watches WHERE user_id = ? AND product_id = ?').get(userId, productId) as Row | undefined;
+    return r ? { targetPrice: r.target_price == null ? undefined : n(r.target_price) } : undefined;
+  }
+
+  watchCounts(userId: string): { total: number; withTarget: number } {
+    const r = this.db.prepare('SELECT COUNT(*) AS t, COUNT(target_price) AS g FROM watches WHERE user_id = ?').get(userId) as Row;
+    return { total: n(r.t), withTarget: n(r.g) };
+  }
+
+  /** Salva (ou atualiza a meta). Mudar a meta zera o "já avisei", para avisar de novo na meta nova. */
+  saveWatch(userId: string, productId: string, targetPrice: number | null, now: Date): void {
+    this.db
+      .prepare(
+        `INSERT INTO watches (user_id, product_id, target_price, created_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id, product_id) DO UPDATE SET target_price = excluded.target_price, notified_price = NULL, notified_at = NULL`,
+      )
+      .run(userId, productId, targetPrice, now.getTime());
+  }
+
+  deleteWatch(userId: string, productId: string): boolean {
+    return n(this.db.prepare('DELETE FROM watches WHERE user_id = ? AND product_id = ?').run(userId, productId).changes) > 0;
+  }
+
+  /** Metas de todo mundo, com o último preço do produto (para o aviso depois de cada varredura). */
+  watchTargets(): Array<{ userId: string; productId: string; targetPrice: number; notifiedPrice?: number; price?: number }> {
+    const rows = this.db
+      .prepare(
+        `SELECT w.user_id, w.product_id, w.target_price, w.notified_price,
+           (SELECT price FROM price_points pp WHERE pp.product_id = w.product_id ORDER BY at DESC LIMIT 1) AS last_price
+         FROM watches w WHERE w.target_price IS NOT NULL`,
+      )
+      .all() as Row[];
+    return rows.map((r) => ({
+      userId: String(r.user_id),
+      productId: String(r.product_id),
+      targetPrice: n(r.target_price),
+      notifiedPrice: r.notified_price == null ? undefined : n(r.notified_price),
+      price: r.last_price == null ? undefined : n(r.last_price),
+    }));
+  }
+
+  /** price = preço avisado; null = o preço voltou acima da meta (o próximo cruzamento avisa de novo). */
+  setWatchNotified(userId: string, productId: string, price: number | null, now: Date): void {
+    this.db.prepare('UPDATE watches SET notified_price = ?, notified_at = ? WHERE user_id = ? AND product_id = ?').run(price, price == null ? null : now.getTime(), userId, productId);
   }
 
   /** Tira do ar as ofertas de lojas que saíram de STORES (o histórico de preço fica guardado). */
@@ -393,6 +491,19 @@ const OFFER_SELECT = `SELECT o.*, p.store, p.external_id, p.title, p.category, p
 
 function toPoint(r: Row): PricePoint {
   return { price: n(r.price), listPrice: r.list_price == null ? undefined : n(r.list_price), at: new Date(n(r.at)) };
+}
+
+function toProduct(r: Row): Product {
+  return {
+    id: String(r.id),
+    store: r.store as StoreId,
+    externalId: String(r.external_id),
+    title: String(r.title),
+    category: r.category as Category,
+    url: String(r.url),
+    imageUrl: r.image_url == null ? undefined : String(r.image_url),
+    seller: r.seller == null ? undefined : String(r.seller),
+  };
 }
 
 function toOffer(r: Row): OfferRow {
